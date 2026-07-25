@@ -34,6 +34,47 @@ function deltaEffects(s: MatchState, ov: { posture?: Posture; atkDelta?: number;
 const sonAvailable = (s: MatchState) => !s.onPitch.includes(7);
 const cgsAvailable = (s: MatchState) => !s.onPitch.includes(9);
 
+// ── 교체 짝 동적 구성 — 커스텀 선발에서도 안전해야 한다 ──────────────
+// 선호 순서에서 조건에 맞는 첫 선수를 고르고, 없으면 밴드 기준 폴백.
+
+function bandOf(s: MatchState, no: number): 'GK' | 'DF' | 'MF' | 'FW' | undefined {
+  const pl = s.lineup.placements.find((p) => p.playerNo === no);
+  if (!pl) return undefined;
+  return s.lineup.slots.find((sl) => sl.id === pl.slotId)?.band;
+}
+
+function pickOff(s: MatchState, prefer: number[], used: Set<number>): number | undefined {
+  for (const no of prefer) if (s.onPitch.includes(no) && !used.has(no)) return no;
+  // 폴백: 그라운드의 MF → FW 순 (GK·DF는 빼지 않는다)
+  for (const band of ['MF', 'FW'] as const) {
+    const c = s.onPitch.find((no) => !used.has(no) && bandOf(s, no) === band);
+    if (c) return c;
+  }
+  return undefined;
+}
+
+function pickOn(s: MatchState, prefer: number[], used: Set<number>): number | undefined {
+  for (const no of prefer) if (!s.onPitch.includes(no) && !used.has(no)) return no;
+  return undefined;
+}
+
+/** 선호 짝 목록에서 유효한 교체 조합을 만든다. 성립 안 되는 짝은 건너뛴다 */
+function buildSubs(s: MatchState, pairs: { off: number[]; on: number[] }[]): { off: number; on: number }[] {
+  const usedOff = new Set<number>();
+  const usedOn = new Set<number>();
+  const out: { off: number; on: number }[] = [];
+  for (const pair of pairs) {
+    const on = pickOn(s, pair.on, usedOn);
+    if (!on) continue;
+    const off = pickOff(s, pair.off, usedOff);
+    if (!off) continue;
+    usedOff.add(off);
+    usedOn.add(on);
+    out.push({ off, on });
+  }
+  return out;
+}
+
 /** D2 — 전반 30': 지배하는데 흔들린다 */
 export function cardsD2(s: MatchState): DecisionOption[] {
   return [
@@ -57,28 +98,38 @@ export function cardsD3(s: MatchState): DecisionOption[] {
   const son = sonAvailable(s);
   const cards: DecisionOption[] = [];
 
-  // A. 그날의 벤치처럼 — 3장 동시 교체 + 시스템 전환
-  const bundleA = son
-    ? [{ off: 11, on: 7 }, { off: 8, on: 24 }, { off: 13, on: 23 }]
-    : [{ off: 18, on: 9 }, { off: 8, on: 24 }, { off: 13, on: 23 }];
+  // A. 그날의 벤치처럼 — 3장 동시 교체 + 시스템 전환 (커스텀 선발에서도 동적 구성)
+  const bundleA = buildSubs(s, [
+    { off: [11, 18, 8], on: son ? [7, 9, 10] : [9, 10, 26] },
+    { off: [8, 6, 24], on: [24, 10, 26, 25] },
+    { off: [13, 22, 3], on: [23, 17, 20] },
+  ]);
   cards.push({
     id: 'd3-likebench',
     coach: son ? '"3장 동시에 갑시다. 그리고 포백으로."' : '"3장을 갈고 시스템을 바꿉시다."',
-    effects: [...deltaEffects(s, { atkDelta: 0.10, defDelta: 0.04 }), '교체 3장 소모'],
-    subsCost: 3,
-    disabled: s.subsRemaining < 3 ? '교체 카드가 부족합니다' : undefined,
+    effects: [...deltaEffects(s, { atkDelta: 0.10, defDelta: 0.04 }), `교체 ${bundleA.length}장 소모`],
+    subsCost: bundleA.length,
+    disabled: bundleA.length < 2
+      ? '동시 교체를 구성할 자원이 없습니다'
+      : s.subsRemaining < bundleA.length
+        ? '교체 카드가 부족합니다'
+        : undefined,
     apply: { subs: bundleA, atkDelta: 0.10, defDelta: 0.04 },
   });
 
   // B. 핀포인트 — 공격 카드 1장
-  const pin = son ? { off: 11, on: 7 } : cgsAvailable(s) ? { off: 18, on: 9 } : { off: 8, on: 10 };
+  const pin = buildSubs(s, [{ off: [11, 18, 8], on: son ? [7, 9, 10, 26] : [9, 10, 26, 25] }]);
   cards.push({
     id: 'd3-pinpoint',
     coach: son ? '"한 장이면 됩니다. 그를 넣읍시다."' : '"공격 카드 한 장만 씁시다."',
     effects: [...deltaEffects(s, { atkDelta: 0.06 }), '교체 1장 소모'],
     subsCost: 1,
-    disabled: s.subsRemaining < 1 ? '교체 카드가 없습니다' : undefined,
-    apply: { subs: [pin], atkDelta: 0.06 },
+    disabled: !pin.length
+      ? '내보낼 카드가 없습니다'
+      : s.subsRemaining < 1
+        ? '교체 카드가 없습니다'
+        : undefined,
+    apply: { subs: pin, atkDelta: 0.06 },
   });
 
   // C. 동요 억제 — 무교체 + 독려
@@ -94,9 +145,8 @@ export function cardsD3(s: MatchState): DecisionOption[] {
 /** D4 — 65' (실점 직후 or 위기 직후): 벤치의 시간 */
 export function cardsD4(s: MatchState): DecisionOption[] {
   const trailing = s.score[0] < s.score[1];
-  const target = cgsAvailable(s) ? { off: s.onPitch.includes(18) ? 18 : s.onPitch.includes(11) ? 11 : 8, on: 9 } : null;
-  const sonIn = sonAvailable(s) ? { off: s.onPitch.includes(11) ? 11 : 8, on: 7 } : null;
-  const sub = target ?? sonIn;
+  const joker = buildSubs(s, [{ off: [18, 11, 8, 6], on: cgsAvailable(s) ? [9, 7, 26] : [7, 26, 25] }]);
+  const sub = joker.length ? joker[0] : null;
 
   const cards: DecisionOption[] = [];
   cards.push({

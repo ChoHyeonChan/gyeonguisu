@@ -186,6 +186,34 @@ describe('경기 완주 스모크', () => {
   });
 });
 
+describe('커스텀 선발 안전성 — 교체 카드는 어떤 XI에서도 성립해야 한다 (자유 배치가 셀링포인트)', () => {
+  it('공격진을 전부 벤치에 둔 극단 선발에서도 D3/D4 카드가 크래시 없이 완주한다', () => {
+    // 투톱투윙도 아니고 아예 수비·미드로만 채운 기괴한 XI — 그것도 감독의 선택이다
+    const lu = realLineup();
+    const weird = [1, 2, 3, 4, 5, 14, 15, 16, 6, 8, 24]; // GK+DF 7명+MF 3명
+    lu.placements.forEach((p, i) => (p.playerNo = weird[i]));
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = playMatch(seed, { lineup: lu, sonStarts: false }, (_id, cards) => {
+        const enabled = cards.filter((c) => !c.disabled);
+        return enabled.length ? enabled[seed % enabled.length].id : null;
+      });
+      expect(s.finished).toBe(true);
+    }
+  });
+
+  it('교체로 나간 선수를 다시 빼려는 조합이 만들어지지 않는다', () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const s = playMatch(seed, { lineup: realLineup(), sonStarts: false }, (id) =>
+        id === 'D3' ? 'd3-likebench' : id === 'D4' ? 'd4-target' : null,
+      );
+      const offs = s.usedSubs.map((u) => u.off);
+      const ons = s.usedSubs.map((u) => u.on);
+      expect(new Set(offs).size).toBe(offs.length); // 같은 선수를 두 번 빼지 않음
+      expect(new Set(ons).size).toBe(ons.length);   // 같은 선수를 두 번 넣지 않음
+    }
+  });
+});
+
 describe('RNG 재현성', () => {
   it('mulberry32 동일 시드 동일 수열', () => {
     const a = mulberry32(7);
