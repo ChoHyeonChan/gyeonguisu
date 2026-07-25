@@ -4,7 +4,8 @@
 import { playMatch, resultOf, type Policy, type D1Setup } from '../engine/flow';
 import { realLineup } from '../engine/formations';
 
-const N = Number(process.env.N ?? 1000);
+declare const process: { env?: Record<string, string | undefined> } | undefined;
+const N = Number((typeof process !== 'undefined' && process?.env?.N) || 1000);
 
 interface PolicyDef {
   name: string;
@@ -42,7 +43,7 @@ const POLICIES: PolicyDef[] = [
   {
     name: 'sensible  (합리적 플레이 — 잠갔다가 필요할 때만 연다)',
     d1: bench,
-    policy: (id, cards, s) => {
+    policy: (id, _cards, s) => {
       switch (id) {
         case 'D2': return 'd2-lock';
         case 'D3': return s.score[0] <= s.score[1] ? 'd3-pinpoint' : 'd3-calm';
@@ -55,7 +56,7 @@ const POLICIES: PolicyDef[] = [
   {
     name: 'aggressive(주장 선발 + 전면 공세)',
     d1: start,
-    policy: (id, cards, s) => {
+    policy: (id, _cards, s) => {
       switch (id) {
         case 'D2': return 'd2-push';
         case 'D3': return 'd3-likebench';

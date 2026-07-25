@@ -171,7 +171,7 @@ describe('표기 수치의 정직성 — probRemaining은 남은 앵커를 포�
 describe('경기 완주 스모크', () => {
   it('90분+추가시간 완주, 이벤트 로그 생성, 신뢰도 0~100 유지', () => {
     for (let seed = 1; seed <= 50; seed++) {
-      const s = playMatch(seed, { lineup: realLineup(), sonStarts: seed % 2 === 0 }, (id, cards) => {
+      const s = playMatch(seed, { lineup: realLineup(), sonStarts: seed % 2 === 0 }, (_id, cards) => {
         const enabled = cards.filter((c) => !c.disabled);
         return enabled.length ? enabled[seed % enabled.length].id : null;
       });
