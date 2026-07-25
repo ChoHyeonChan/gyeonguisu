@@ -91,11 +91,18 @@ describe('교체 적중 — 신뢰도 ±5%p 보정', () => {
 });
 
 describe('D4 카드 노출 조건 (조커 소멸의 연출)', () => {
-  it('조규성·손흥민이 모두 그라운드면 타깃맨 카드 비활성 + 사유 문구', () => {
+  it('조규성·손흥민이 그라운드에 있으면 차선 조커(이동경 등)로 카드가 성립한다', () => {
     const s = fresh();
     s.onPitch = s.onPitch.map((n) => (n === 18 ? 9 : n === 11 ? 7 : n));
-    const cards = cardsD4(s);
-    const target = cards.find((c) => c.id === 'd4-target')!;
+    const target = cardsD4(s).find((c) => c.id === 'd4-target')!;
+    expect(target.disabled).toBeUndefined();
+  });
+
+  it('벤치의 공격 자원이 전부 소진되면 타깃맨 카드 비활성 + 사유 문구', () => {
+    const s = fresh();
+    // 9·7은 물론 차선 조커(26 이동경, 25 엄지성)까지 이미 그라운드
+    s.onPitch = s.onPitch.map((n) => (n === 18 ? 9 : n === 11 ? 7 : n === 8 ? 26 : n === 6 ? 25 : n));
+    const target = cardsD4(s).find((c) => c.id === 'd4-target')!;
     expect(target.disabled).toContain('조커');
   });
 
