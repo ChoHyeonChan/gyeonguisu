@@ -36,9 +36,14 @@ export const FORMATIONS: Record<Exclude<FormationKey, 'custom'>, Slot[]> = {
   ],
 };
 
-/** 그날의 실제 선발 — 기본값 라인업 */
+/** 프리셋의 복사본 — 슬롯 객체를 공유하면 자유 배치가 전역 상수를 오염시킨다 (검수 크리티컬) */
+export function slotsOf(key: Exclude<FormationKey, 'custom'>): Slot[] {
+  return FORMATIONS[key].map((s) => ({ ...s }));
+}
+
+/** 그날의 실제 선발 — 기본값 라인업 (항상 새 객체) */
 export function realLineup(): Lineup {
-  const slots = FORMATIONS['3-4-3'];
+  const slots = slotsOf('3-4-3');
   return {
     formation: '3-4-3',
     slots,

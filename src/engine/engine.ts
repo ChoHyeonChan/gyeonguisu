@@ -4,6 +4,7 @@ import type { MatchState, MatchEvent, Lineup, Posture } from './types';
 import type { Rng } from './rng';
 import * as B from './balance';
 import { teamScalars } from './fitness';
+import { byNo } from '../data/players';
 
 export const TICK = 5;
 
@@ -15,6 +16,12 @@ export const PAUSE_AT = { D2: 30, D3: 45, D4: 65, D5: 80 } as const;
 
 export function createMatch(seed: number, lineup: Lineup): MatchState {
   const sc = teamScalars(lineup);
+  // 라인업 딥클론 — 호출자가 같은 객체로 재경기를 돌려도 1차전의 교체가 새지 않게 (검수 크리티컬)
+  const own: Lineup = {
+    formation: lineup.formation,
+    slots: lineup.slots.map((s) => ({ ...s })),
+    placements: lineup.placements.map((p) => ({ ...p })),
+  };
   return {
     seed,
     minute: 0,
@@ -25,8 +32,8 @@ export function createMatch(seed: number, lineup: Lineup): MatchState {
     defScalar: sc.def,
     subsRemaining: 5,
     windowsRemaining: 3,
-    lineup,
-    onPitch: lineup.placements.map((p) => p.playerNo),
+    lineup: own,
+    onPitch: own.placements.map((p) => p.playerNo),
     usedSubs: [],
     events: [],
     decisions: [],
@@ -57,12 +64,12 @@ export function tickProbs(s: MatchState, tickStart: number): [number, number, nu
   if (tickStart === 60) {
     // 62' 국면: 발생 확률 × 자세별 전환율을 실점 확률에 합성 — 표기 수치도 이 값을 그대로 쓴다
     const strikeGoal = (B.ANCHOR62_STRIKE_P * B.ANCHOR62_GOAL_BY_POSTURE[s.posture]) / def;
-    pOpp = 1 - (1 - pOpp) * (1 - clamp01(strikeGoal));
+    pOpp = 1 - (1 - pOpp) * (1 - clampProb(strikeGoal));
     cOpp *= 1.4;
   }
 
-  // 역습 모드: 상대가 나올수록 한국 한 방
-  if (s.posture === 'counter') pKor *= B.COUNTER_SPIKE * (cOpp > B.BASE_OPP_CHANCE ? 1.1 : 1.0);
+  // 역습 모드: 상대 위협이 큰 틱에서만 스파이크 — 상시 적용하면 지배전략이 된다 (검수 반영)
+  if (s.posture === 'counter' && cOpp >= B.COUNTER_TRIGGER_COPP) pKor *= B.COUNTER_SPIKE;
 
   // 추가시간: 뒤지고 있으면 총력전 국면
   if (tickStart >= 90) {
@@ -73,10 +80,19 @@ export function tickProbs(s: MatchState, tickStart: number): [number, number, nu
     if (s.flags.has('stoppagePush')) pKor *= 1.3;
   }
 
-  return [clamp01(pKor), clamp01(pOpp), clamp01(cKor), clamp01(cOpp)];
+  return [clampProb(pKor), clampProb(pOpp), clampProb(cKor), clampProb(cOpp)];
 }
 
-const clamp01 = (x: number) => Math.min(Math.max(x, 0), 0.6);
+/** 추가 플래그를 얹은 가상 상태 — 표기 수치 계산용 */
+function ghostOf(s: MatchState, override?: Partial<Pick<MatchState, 'posture' | 'atkScalar' | 'defScalar'>>, extraFlags?: string[]): MatchState {
+  const flags = new Set(s.flags);
+  for (const f of extraFlags ?? []) flags.add(f);
+  return { ...s, ...override, flags, events: [], score: [...s.score] as [number, number] };
+}
+
+/** 확률 안전 상한 0.6 — 단일 롤 배타 판정(r<pKor / r<pKor+pOpp)이 깨지지 않는 한계.
+ *  최악 조합(allout+앵커+스칼라 하한)에서도 pKor+pOpp<1 유지가 실측 확인됨 */
+const clampProb = (x: number) => Math.min(Math.max(x, 0), 0.6);
 
 /** 한 틱 실행 — 이벤트를 생성하고 상태를 전진시킨다 */
 export function runTick(s: MatchState, tickStart: number, rng: Rng): MatchEvent[] {
@@ -122,17 +138,21 @@ function pickScorer(s: MatchState, rng: Rng): number {
 }
 
 function bandPlayer(s: MatchState, band: 'GK' | 'DF' | 'MF' | 'FW', rng: Rng): number | undefined {
-  const ids = s.lineup.placements
-    .filter((p) => s.lineup.slots.find((sl) => sl.id === p.slotId)!.band === band)
-    .map((p) => p.playerNo)
-    .filter((no) => s.onPitch.includes(no));
+  // 서사 바인딩은 슬롯이 아니라 선수의 자연 밴드 기준 — 교체 투입된 타깃맨이
+  // 물려받은 MF 슬롯 때문에 득점자 후보에서 빠지는 왜곡 방지 (검수 반영)
+  let ids = s.onPitch.filter((no) => byNo(no).bands[0] === band);
+  if (!ids.length) ids = s.onPitch.filter((no) => byNo(no).bands.includes(band));
   if (!ids.length) return undefined;
   return ids[Math.floor(rng() * ids.length)];
 }
 
-/** 남은 경기에서 최소 1골 확률 (기대 계산 — 표기 수치의 근거). override로 가상 상태 평가 */
-export function probRemaining(s: MatchState, override?: Partial<Pick<MatchState, 'posture' | 'atkScalar' | 'defScalar'>>): { kor: number; opp: number } {
-  const ghost: MatchState = { ...s, ...override, flags: new Set(s.flags), events: [], score: [...s.score] as [number, number] };
+/** 남은 경기에서 최소 1골 확률 (기대 계산 — 표기 수치의 근거). override·extraFlags로 가상 상태 평가 */
+export function probRemaining(
+  s: MatchState,
+  override?: Partial<Pick<MatchState, 'posture' | 'atkScalar' | 'defScalar'>>,
+  extraFlags?: string[],
+): { kor: number; opp: number } {
+  const ghost = ghostOf(s, override, extraFlags);
   let noKor = 1;
   let noOpp = 1;
   for (const t of TICK_STARTS) {
@@ -154,14 +174,24 @@ export function applySubs(
   if (!subs.length) return { impact: false };
   if (s.subsRemaining < subs.length) throw new Error('교체 카드 부족');
   if (!atHT && s.windowsRemaining < 1) throw new Error('교체 윈도우 소진');
+
+  // 1패스: 전체 조합을 가상 적용으로 검증 — 부분 적용 후 실패가 불가능해야 한다 (원자성, 검수 반영)
+  const virtual = new Set(s.onPitch);
   for (const { off, on } of subs) {
-    if (!s.onPitch.includes(off)) throw new Error(`교체 대상이 그라운드에 없음: ${off}`);
-    if (s.onPitch.includes(on)) throw new Error(`이미 그라운드에 있음: ${on}`);
+    if (!virtual.has(off)) throw new Error(`교체 대상이 그라운드에 없음: ${off}`);
+    if (virtual.has(on)) throw new Error(`이미 그라운드에 있음: ${on}`);
+    virtual.delete(off);
+    virtual.add(on);
+  }
+
+  // 2패스: 실제 변이
+  for (const { off, on } of subs) {
     s.onPitch = s.onPitch.map((n) => (n === off ? on : n));
     const pl = s.lineup.placements.find((p) => p.playerNo === off)!;
     pl.playerNo = on;
     s.usedSubs.push({ minute: s.minute, off, on });
   }
+  // 주의: 교체 후 팀 스칼라는 재계산하지 않는다 — 효과는 카드의 flat delta가 전담한다 (의도)
   s.subsRemaining -= subs.length;
   if (!atHT) s.windowsRemaining -= 1;
 

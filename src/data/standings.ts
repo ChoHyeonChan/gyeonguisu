@@ -28,6 +28,17 @@ export const THIRD_PLACE_FINAL: ThirdRow[] = [
 
 export const ADVANCE_LINE = 8;
 
+/** 사용자 스코어를 반영한 3위팀 순위표 — 패배 시 P4 대기실용.
+ *  한국 행의 gd만 동적(경기 전 GD 0 + 남아공전 스코어), 나머지 11팀은 확정 실데이터.
+ *  동률 정렬은 승점 → 골득실 (표시 컬럼 한정 원칙과 동일 기준) */
+export function thirdTableFor(korGf: number, korGa: number): ThirdRow[] {
+  const rows = THIRD_PLACE_FINAL.filter((r) => !r.isKorea).map((r) => ({ ...r }));
+  rows.push({ rank: 0, team: '대한민국', group: 'A', pts: 3, gd: 0 + (korGf - korGa), isKorea: true });
+  rows.sort((a, b) => b.pts - a.pts || b.gd - a.gd);
+  rows.forEach((r, i) => (r.rank = i + 1));
+  return rows;
+}
+
 /** 6/27 밤(현지)의 두 경기 — 한국의 운명을 결정한 경기들 */
 export const FATE_MATCHES = [
   { label: '크로아티아 2-1 가나', group: 'L', detail: '가나가 승점 4로 3위 유지 — 한국 위에 남는다' },

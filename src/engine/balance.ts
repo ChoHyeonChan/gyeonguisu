@@ -1,5 +1,5 @@
 // 밸런스 상수 전부 이 파일에서 관리한다 — 매일 시뮬 1,000회 분포 로그로 튜닝 (기획서 §6-3)
-// 근거: 실경기 xG는 양팀 각 1.0 안팎 (Opta 1.1-1.0). 18틱 × 기본확률 ≈ 기대득점.
+// 근거: 실경기 xG는 양팀 각 1.0 안팎 (Opta 1.1-1.0). 19틱(추가시간 포함) × 기본확률 ≈ 기대득점.
 
 import type { Posture } from './types';
 
@@ -18,11 +18,13 @@ export const POSTURE_MOD: Record<Posture, [number, number]> = {
   normal:  [1.00, 1.00],
   high:    [1.25, 1.32],
   allout:  [1.65, 1.98],
-  counter: [0.92, 0.80],
+  counter: [0.78, 0.82],
 };
 
-/** 역습 모드: 상대가 넘어온 틱에 한해 한국 득점 스파이크 */
-export const COUNTER_SPIKE = 1.45;
+/** 역습 모드: 평상시엔 웅크리고, 상대 위협이 큰 틱(cOpp가 트리거 이상)에만 스파이크.
+ *  전 틱 상시 적용하면 counter가 지배전략이 된다 — 검수에서 실측 확인된 함정 */
+export const COUNTER_SPIKE = 1.5;
+export const COUNTER_TRIGGER_COPP = 0.14;
 
 /** 실경기 앵커 — 62' 상대 교체 → 니어포스트 크로스 국면.
  *  '그 순간'이 발생할 확률과, 발생 시 자세별 실점 전환율을 분리해 서명 장면의 체감을 보장한다 */

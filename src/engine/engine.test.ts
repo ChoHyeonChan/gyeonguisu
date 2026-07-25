@@ -6,8 +6,9 @@ import { createMatch, applySubs, applyOrder, probRemaining, TICK_STARTS } from '
 import { realLineup } from './formations';
 import { mulberry32 } from './rng';
 import { playMatch, resultOf, setupMatch } from './flow';
-import { cardsD3, cardsD4 } from './decisions';
+import { cardsD3, cardsD4, cardsD5, applyOption } from './decisions';
 import { teamScalars } from './fitness';
+import { thirdTableFor } from '../data/standings';
 import * as B from './balance';
 
 const fresh = (seed = 1) => createMatch(seed, realLineup());
@@ -218,6 +219,80 @@ describe('커스텀 선발 안전성 — 교체 카드는 어떤 XI에서도 성
       expect(new Set(offs).size).toBe(offs.length); // 같은 선수를 두 번 빼지 않음
       expect(new Set(ons).size).toBe(ons.length);   // 같은 선수를 두 번 넣지 않음
     }
+  });
+});
+
+describe('검수 반영 회귀 — 참조 오염·지배전략·원자성·표기 정직성', () => {
+  it('같은 lineup 객체로 두 번 플레이해도 결과가 같다 (재경기 오염 방지)', () => {
+    const lu = realLineup();
+    const a = playMatch(42, { lineup: lu, sonStarts: false }, (id) => (id === 'D3' ? 'd3-likebench' : null));
+    const b = playMatch(42, { lineup: lu, sonStarts: false }, (id) => (id === 'D3' ? 'd3-likebench' : null));
+    expect(a.score).toEqual(b.score);
+    expect(a.usedSubs).toEqual(b.usedSubs);
+  });
+
+  it('반환된 라인업의 슬롯을 변형해도 전역 프리셋이 오염되지 않는다', () => {
+    const lu1 = realLineup();
+    lu1.slots[0].band = 'FW';
+    const lu2 = realLineup();
+    expect(lu2.slots[0].band).toBe('GK');
+  });
+
+  it('counter는 지배전략이 아니다 — high보다 공격이 약해야 한다 (트레이드오프)', () => {
+    const s = fresh();
+    s.minute = 45;
+    const counter = probRemaining(s, { posture: 'counter' });
+    const high = probRemaining(s, { posture: 'high' });
+    const normal = probRemaining(s, { posture: 'normal' });
+    expect(counter.kor).toBeLessThan(high.kor);   // 공격은 high가 우위
+    expect(counter.opp).toBeLessThan(normal.opp); // 수비는 counter가 우위 — 양쪽을 다 이기면 안 된다
+  });
+
+  it('지시가 거부되면 stoppagePush 플래그도 붙지 않는다 (공짜 부스트 금지)', () => {
+    const s = fresh();
+    s.trust = 20;
+    s.minute = 80;
+    s.score = [0, 1];
+    const allout = cardsD5(s).find((c) => c.id === 'd5-allout')!;
+    applyOption(s, allout, alwaysHigh); // 롤 실패 경로
+    expect(s.posture).toBe('normal');
+    expect(s.flags.has('stoppagePush')).toBe(false);
+  });
+
+  it('교체 조합 중 하나라도 무효면 아무것도 적용되지 않는다 (원자성)', () => {
+    const s = fresh();
+    const before = { onPitch: [...s.onPitch], subs: s.subsRemaining, used: s.usedSubs.length };
+    expect(() => applySubs(s, [{ off: 11, on: 7 }, { off: 18, on: 7 }], false, alwaysHigh)).toThrow();
+    expect(s.onPitch).toEqual(before.onPitch);
+    expect(s.subsRemaining).toBe(before.subs);
+    expect(s.usedSubs.length).toBe(before.used);
+  });
+
+  it('교체 카드 표기가 신뢰도에 따라 달라진다 (적중 기대값 반영)', () => {
+    const hi = fresh();
+    hi.trust = 80;
+    const lo = fresh();
+    lo.trust = 30;
+    const ehi = cardsD3(hi).find((c) => c.id === 'd3-pinpoint')!.effects.join();
+    const elo = cardsD3(lo).find((c) => c.id === 'd3-pinpoint')!.effects.join();
+    expect(ehi).not.toBe(elo);
+  });
+
+  it('비활성 카드를 고르면 개입하지 않음으로 기록되고 D3 침묵 페널티가 걸린다', () => {
+    const s = playMatch(7, { lineup: realLineup(), sonStarts: false }, (id, cards) => {
+      if (id !== 'D3') return null;
+      // 일부러 존재하지 않는 카드 id를 반환
+      void cards;
+      return 'd3-does-not-exist';
+    });
+    const d3 = s.decisions.find((d) => d.id === 'D3')!;
+    expect(d3.optionId).toBe('no-intervention');
+  });
+
+  it('thirdTableFor — 스코어에 따라 한국 행이 실제 산술로 재배열된다', () => {
+    expect(thirdTableFor(0, 1).find((r) => r.isKorea)!.rank).toBe(10); // 실제와 동일
+    expect(thirdTableFor(0, 3).find((r) => r.isKorea)!.rank).toBeGreaterThanOrEqual(10); // 대패 시 더 밀린다
+    expect(thirdTableFor(2, 3).find((r) => r.isKorea)!.rank).toBe(10);
   });
 });
 

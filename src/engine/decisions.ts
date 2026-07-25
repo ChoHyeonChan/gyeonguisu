@@ -7,12 +7,13 @@ import type { Rng } from './rng';
 import { probRemaining, applyOrder, applySubs, clampTrust } from './engine';
 import * as B from './balance';
 
-const pp = (d: number) => `${d >= 0 ? '+' : ''}${Math.round(d * 100)}%p`;
+// 소수 1자리 — 신뢰도 보정(±0.2%p대)이 표기에서 뭉개지지 않는 최소 정밀도
+const pp = (d: number) => `${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}%p`;
 
 /** 자세 변경 카드의 표기 수치: 지시 실행 확률까지 반영한 기대값 */
-function orderEffects(s: MatchState, posture: Posture): string[] {
+function orderEffects(s: MatchState, posture: Posture, extraFlags?: string[]): string[] {
   const base = probRemaining(s);
-  const withP = probRemaining(s, { posture });
+  const withP = probRemaining(s, { posture }, extraFlags);
   const pExec = s.trust < B.TRUST_ORDER_THRESHOLD ? B.TRUST_ORDER_SUCCESS : 1;
   const kor = pExec * withP.kor + (1 - pExec) * base.kor - base.kor;
   const opp = pExec * withP.opp + (1 - pExec) * base.opp - base.opp;
@@ -21,11 +22,24 @@ function orderEffects(s: MatchState, posture: Posture): string[] {
   return rows;
 }
 
-function deltaEffects(s: MatchState, ov: { posture?: Posture; atkDelta?: number; defDelta?: number }): string[] {
+/** 교체 적중 확률 — 신뢰도 보정 포함 (표기와 판정이 같은 식을 쓴다) */
+function subImpactP(trust: number): number {
+  let p = B.SUB_IMPACT_BASE;
+  if (trust >= B.TRUST_SUB_MOD_HIGH) p += B.TRUST_SUB_MOD;
+  if (trust < B.TRUST_ORDER_THRESHOLD) p -= B.TRUST_SUB_MOD;
+  return p;
+}
+
+function deltaEffects(
+  s: MatchState,
+  ov: { posture?: Posture; atkDelta?: number; defDelta?: number; withSubImpact?: boolean },
+): string[] {
+  // 교체 카드는 적중 롤 기대값까지 합산 — "사용자가 본 숫자 = 엔진이 쓰는 숫자" (검수 반영)
+  const atkDelta = (ov.atkDelta ?? 0) + (ov.withSubImpact ? subImpactP(s.trust) * B.SUB_IMPACT_BONUS_ATK : 0);
   const base = probRemaining(s);
   const withP = probRemaining(s, {
     posture: ov.posture ?? s.posture,
-    atkScalar: s.atkScalar + (ov.atkDelta ?? 0),
+    atkScalar: s.atkScalar + atkDelta,
     defScalar: s.defScalar + (ov.defDelta ?? 0),
   });
   return [`득점 기대 ${pp(withP.kor - base.kor)}`, `실점 위험 ${pp(withP.opp - base.opp)}`];
@@ -107,7 +121,7 @@ export function cardsD3(s: MatchState): DecisionOption[] {
   cards.push({
     id: 'd3-likebench',
     coach: son ? '"3장 동시에 갑시다. 그리고 포백으로."' : '"3장을 갈고 시스템을 바꿉시다."',
-    effects: [...deltaEffects(s, { atkDelta: 0.10, defDelta: 0.04 }), `교체 ${bundleA.length}장 소모`],
+    effects: [...deltaEffects(s, { atkDelta: 0.10, defDelta: 0.04, withSubImpact: true }), `교체 ${bundleA.length}장 소모`],
     subsCost: bundleA.length,
     disabled: bundleA.length < 2
       ? '동시 교체를 구성할 자원이 없습니다'
@@ -122,7 +136,7 @@ export function cardsD3(s: MatchState): DecisionOption[] {
   cards.push({
     id: 'd3-pinpoint',
     coach: son ? '"한 장이면 됩니다. 그를 넣읍시다."' : '"공격 카드 한 장만 씁시다."',
-    effects: [...deltaEffects(s, { atkDelta: 0.06 }), '교체 1장 소모'],
+    effects: [...deltaEffects(s, { atkDelta: 0.06, withSubImpact: true }), '교체 1장 소모'],
     subsCost: 1,
     disabled: !pin.length
       ? '내보낼 카드가 없습니다'
@@ -149,11 +163,12 @@ export function cardsD4(s: MatchState): DecisionOption[] {
   const sub = joker.length ? joker[0] : null;
 
   const cards: DecisionOption[] = [];
+  // 교체 동반 자세 변경은 실행 롤 면제 — 벤치가 몸(교체)으로 의사를 전달하는 것이라 거부 여지가 없다 (의도)
   cards.push({
     id: 'd4-target',
     coach: trailing ? '"타깃맨을 올리시죠. 지금 바로."' : '"쐐기를 준비합시다. 한 골 더."',
     effects: sub
-      ? [...deltaEffects(s, { atkDelta: B.SUB_BASE_ATK, posture: trailing ? 'high' : s.posture }), '교체 1장 · 윈도우 1회 소모']
+      ? [...deltaEffects(s, { atkDelta: B.SUB_BASE_ATK, posture: trailing ? 'high' : s.posture, withSubImpact: true }), '교체 1장 · 윈도우 1회 소모']
       : [],
     subsCost: 1,
     disabled: !sub
@@ -188,7 +203,7 @@ export function cardsD5(s: MatchState): DecisionOption[] {
       {
         id: 'd5-allout',
         coach: '"다 걸어야 합니다. 투톱에 양 날개, 전부 올립시다."',
-        effects: orderEffects(s, 'allout'), isOrder: true,
+        effects: orderEffects(s, 'allout', ['stoppagePush']), isOrder: true,
         apply: { posture: 'allout', flag: 'stoppagePush' },
       },
       { id: 'd5-push', coach: '"서두르지 말고, 정공법으로 밀어붙입시다."', effects: orderEffects(s, 'high'), isOrder: true, apply: { posture: 'high' } },
@@ -209,16 +224,20 @@ export function cardsD5(s: MatchState): DecisionOption[] {
   ];
 }
 
-/** 카드 적용 — 지시 롤·교체·신뢰도 일괄 처리 */
-export function applyOption(s: MatchState, opt: DecisionOption, rng: Rng): void {
+/** 카드 적용 — 지시 롤·교체·신뢰도 일괄 처리.
+ *  atHT는 호출자(flow/리듀서)가 결정 id로 판단해 명시한다 — 분 비교에 의존하지 않는다 (검수 반영) */
+export function applyOption(s: MatchState, opt: DecisionOption, rng: Rng, ctx?: { atHT?: boolean }): void {
   const e = opt.apply;
   if (e.subs?.length) {
-    applySubs(s, e.subs, s.minute === 45, rng);
+    applySubs(s, e.subs, !!ctx?.atHT, rng);
   }
+  let executed = true;
   if (e.posture) {
-    if (opt.isOrder) applyOrder(s, e.posture, rng);
-    else s.posture = e.posture;
+    if (opt.isOrder) executed = applyOrder(s, e.posture, rng).executed;
+    else s.posture = e.posture; // 교체 동반 전술 변경 — 실행 롤 면제 (D4 주석 참고)
   }
+  // 지시가 거부됐다면 그 지시에 묶인 부수 효과(플래그·스칼라)도 함께 무효 — 공짜 부스트 금지 (검수 반영)
+  if (opt.isOrder && !executed) return;
   if (e.atkDelta) s.atkScalar += e.atkDelta;
   if (e.defDelta) s.defScalar += e.defDelta;
   if (e.trustDelta) s.trust = clampTrust(s.trust + e.trustDelta);

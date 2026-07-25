@@ -48,15 +48,13 @@ export function playMatch(seed: number, d1: D1Setup, policy: Policy): MatchState
       const [, id] = pause;
       const cards = cardsFor(id, s);
       const pick = policy(id, cards, s);
-      if (pick) {
-        const opt = cards.find((c) => c.id === pick);
-        if (opt && !opt.disabled) {
-          applyOption(s, opt, rng);
-          s.decisions.push({ id, optionId: opt.id, minute: t });
-        }
+      const opt = pick ? cards.find((c) => c.id === pick) : undefined;
+      if (opt && !opt.disabled) {
+        applyOption(s, opt, rng, { atHT: id === 'D3' });
+        s.decisions.push({ id, optionId: opt.id, minute: t });
       } else {
-        // 하프타임에 아무 말도 하지 않으면 라커룸이 동요한다
-        if (id === 'D3') s.trust = clampTrust(s.trust + B.TRUST_D3_SILENCE);
+        // 무효 선택(없는 카드·비활성 카드)도 '개입하지 않음'과 동일 경로 — 결정이 증발하지 않는다 (검수 반영)
+        if (id === 'D3') s.trust = clampTrust(s.trust + B.TRUST_D3_SILENCE); // 라커룸 침묵의 대가
         s.decisions.push({ id, optionId: 'no-intervention', minute: t });
       }
     }
