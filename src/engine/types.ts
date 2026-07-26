@@ -84,7 +84,7 @@ export interface MatchState {
   onPitch: number[];       // 현재 그라운드 11인
   usedSubs: { minute: number; off: number; on: number }[];
   events: MatchEvent[];
-  decisions: { id: DecisionId; optionId: string; minute: number }[];
+  decisions: { id: DecisionId; optionId: string; minute: number; alts?: string[] }[];
   flags: Set<string>;
   finished: boolean;
 }

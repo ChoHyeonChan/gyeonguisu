@@ -1,32 +1,58 @@
-# React + TypeScript + Vite
+# 경우의 수 — 그날, 몬테레이의 벤치에 당신이 앉는다면
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+2026 월드컵 조별리그 최종전, 대한민국 대 남아공(0-1). 비기기만 해도 사실상 진출이 확정되던 경기를
+사용자가 감독이 되어 다시 지휘하는 **감독 의사결정 시뮬레이션**입니다.
 
-Currently, two official plugins are available:
+선발 명단부터 마지막 교체 카드까지 다섯 번의 결정. 모든 선택지에는 확률이 표시되고,
+선수단 신뢰를 잃으면 지시가 그라운드에 전달되지 않습니다. 경기가 끝나면, 그날의 한국이 그랬듯
+남의 경기 결과를 기다리는 '경우의 수 대기실'이 기다립니다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> 데이콘 월간 해커톤 「내가 축구 감독이라면 — 월드컵 전술 웹서비스 챌린지」 출품작
 
-## React Compiler
+## 실행 방법
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+| 명령 | 설명 |
+|---|---|
+| `npm run dev` | 개발 서버 |
+| `npm run build` | 프로덕션 빌드 (`dist/`) |
+| `npm test` | 엔진 규칙 테스트 (vitest) |
+| `npm run sim` | 밸런스 시뮬레이션 1,000회 분포 로그 (`N=3000` 환경변수로 횟수 변경) |
+
+- 별도 회원가입·API 키 없이 브라우저에서 바로 플레이됩니다.
+- `?fast=1` 쿼리로 경기 배속(시연·테스트용): `http://localhost:5173/?fast=1`
+
+## 사용 기술
+
+| 영역 | 선택 |
+|---|---|
+| 프론트 | React 19 + Vite + TypeScript |
+| 조작 | dnd-kit 드래그 + 탭-투-배치 병행 (PC·모바일 이중 조작계) |
+| 게임 로직 | 규칙 고정 확률 엔진 (5분 틱, 시드 RNG — 같은 시드는 같은 경기) |
+| 사운드 | Web Audio 합성 (외부 오디오 파일 0개 — 관중 소음·함성·휘슬 전부 코드 생성) |
+| 저장 | localStorage (재도전 이력) — 서버 저장 없음 |
+| 배포 | Vercel 정적 + 서버리스 함수 1개 (AI 결산, 실패 시 규칙 기반 폴백) |
+
+## 구조
+
+```
+src/
+  data/      실제 경기 데이터 (26인 명단·경기 기록·순위표) — 전부 JSON 하드코딩
+  engine/    확률 엔진·결정 카드·신뢰도·교체 자원 (순수 함수, UI 무의존)
+  content/   중계 티커·여론 헤드라인·결산 서술 대본
+  game/      화면 (브리핑 → 라커룸 → 매치 → 경우의 수 대기실 → 결산)
+  sim/       밸런스 시뮬레이션 하네스
+docs/
+  sources.md 모든 실제 기록의 원출처 아카이브
+```
+
+## 데이터와 원칙
+
+- 경기 기록·순위·명단은 전부 공개 보도를 교차확인한 실제 데이터입니다. 출처는 [docs/sources.md](docs/sources.md).
+- 실존 감독의 실명은 쓰지 않습니다. 표기는 "그날의 벤치"이며, 우열을 판정하는 문구도 없습니다.
+- 선수는 공고가 허용한 범위(실명·포지션·등번호 텍스트)만 사용하고, 이미지는 전부 자체 제작입니다.
+- 본 서비스는 실제 경기 기록에 기반한 **가상 시뮬레이션**입니다.

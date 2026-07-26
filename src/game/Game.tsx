@@ -35,6 +35,8 @@ export default function Game() {
   const begin = (d1: D1Result) => {
     const seed = randomSeed();
     stateRef.current = setupMatch(seed, d1);
+    // D1의 가보지 않은 갈림길 기록
+    stateRef.current.decisions[0].alts = [d1.sonStarts ? '벤치에 둔다, 후반 조커 확보' : '선발로 쓴다, 초기 신뢰 +10'];
     rngRef.current = mulberry32(seed);
     // 여론 헤드라인 — D1 직후. 실제 선발과 3인 이상 다르면 '개편' 프레임
     const diff = d1.lineup.placements.filter((p, i) => p.playerNo !== REAL_XI[i]).length;
@@ -46,9 +48,14 @@ export default function Game() {
 
   const finished = () => {
     const s = stateRef.current!;
-    setResult(resultOf(s));
+    const r = resultOf(s);
+    setResult(r);
     try {
       localStorage.setItem(PLAYS_KEY, String(playCount() + 1));
+      // 재도전 이력 — 지금까지 살아본 경우의 수들
+      const hist = JSON.parse(localStorage.getItem('gsu-history') ?? '[]') as { r: string; k: number; o: number }[];
+      hist.push({ r, k: s.score[0], o: s.score[1] });
+      localStorage.setItem('gsu-history', JSON.stringify(hist.slice(-10)));
     } catch {
       /* 사생활 모드 등 — 무시 */
     }

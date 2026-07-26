@@ -119,13 +119,15 @@ export function MatchView(props: {
     const d = decision!;
     const opt = optId ? d.cards.find((c) => c.id === optId) : undefined;
     const minute = TICK_STARTS[tickIdx.current];
+    // 가보지 않은 갈림길 — 결산 리플레이에서 흐릿하게 남는다 (기획서 P5)
+    const alts = d.cards.filter((c) => !c.disabled && c.id !== optId).map((c) => c.coach.replace(/"/g, ''));
     if (opt && !opt.disabled) {
       applyOption(st, opt, rng, { atHT: d.id === 'D3' });
-      st.decisions.push({ id: d.id, optionId: opt.id, minute });
+      st.decisions.push({ id: d.id, optionId: opt.id, minute, alts });
       push({ minute: `${minute}'`, text: `벤치의 결정 · ${opt.coach.replace(/"/g, '')}`, kind: 'sys' });
     } else {
       if (d.id === 'D3') st.trust = clampTrust(st.trust + B.TRUST_D3_SILENCE);
-      st.decisions.push({ id: d.id, optionId: 'no-intervention', minute });
+      st.decisions.push({ id: d.id, optionId: 'no-intervention', minute, alts });
       push({ minute: `${minute}'`, text: '벤치는 움직이지 않았다.', kind: 'sys' });
     }
     if (d.id === 'D3') {

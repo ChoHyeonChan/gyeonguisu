@@ -230,6 +230,20 @@ h2 { font-size: 1.2rem; } h3 { font-size: 1rem; margin: 18px 0 8px; color: var(-
 .chip.lift .no { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
 .chip.over .no { box-shadow: 0 0 0 5px rgba(255, 183, 3, 0.45); }
 
+/* ── 고도화 2차: 리플레이·이력·AI 배지·운명 연출 ── */
+.tl-body { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.tl-alt { color: var(--dim); opacity: 0.45; filter: blur(0.6px); font-size: 0.76rem; }
+.ai-badge { font-size: 0.6rem; background: var(--green); color: #0b1524; border-radius: 4px; padding: 1px 6px; vertical-align: middle; margin-left: 6px; font-weight: 800; }
+.history-strip { display: flex; gap: 6px; flex-wrap: wrap; }
+.hchip { border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.hchip.win { border-color: var(--green); color: var(--green); }
+.hchip.loss { border-color: var(--red); color: var(--red); }
+.hchip.draw { border-color: var(--amber); color: var(--amber); }
+.third-table tr.hit td { animation: rowHit 1.4s ease; }
+.third-table tr.doom td { animation: doomPulse 1.6s ease infinite; }
+@keyframes rowHit { 0% { background: rgba(255, 93, 93, 0.35); } 100% { background: transparent; } }
+@keyframes doomPulse { 0%, 100% { background: rgba(255, 93, 93, 0.12); } 50% { background: rgba(255, 93, 93, 0.28); } }
+
 /* ── 애니메이션 ────────────────────────── */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes sheetUp { from { transform: translateY(40%); opacity: 0.6; } to { transform: none; opacity: 1; } }

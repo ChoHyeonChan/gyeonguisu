@@ -4,7 +4,7 @@ import type { MatchState, MatchResult } from '../../engine/types';
 import { REAL_BENCH_MOVES, byNo } from '../../data/players';
 import { groupAfter } from '../../data/standings';
 import { headline, verdictText } from '../content';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const OPT_LABEL: Record<string, string> = {
   'd1-start': '주장 선발',
@@ -54,6 +54,40 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
   );
   const table = groupAfter(result, k, o);
   const [copied, setCopied] = useState(false);
+  const [aiText, setAiText] = useState<string | null>(null);
+
+  // AI 결산 — 서버리스 1회 호출. 실패·미배포 환경이면 규칙 기반 서술이 그대로 남는다 (기획서 §6-4 폴백)
+  useEffect(() => {
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), 5000);
+    fetch('/api/verdict', {
+      method: 'POST',
+      signal: ac.signal,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        result,
+        score: s.score,
+        trust: s.trust,
+        decisions: s.decisions.map((d) => ({ id: d.id, label: OPT_LABEL[d.optionId] ?? d.optionId })),
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { text?: string } | null) => {
+        if (j?.text) setAiText(j.text);
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(to));
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const history = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('gsu-history') ?? '[]') as { r: string; k: number; o: number }[];
+    } catch {
+      return [];
+    }
+  }, []);
 
   const share = async () => {
     const path = s.decisions.map((d) => OPT_LABEL[d.optionId] ?? d.optionId).join(' → ');
@@ -108,10 +142,18 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
           <div key={d.id} className={`tl-item ${d.optionId === 'no-intervention' ? 'silent' : ''}`}>
             <span className="tl-id">{d.id}</span>
             <span className="tl-min">{d.id === 'D1' ? '킥오프 전' : d.id === 'D3' ? 'HT' : `${d.minute}'`}</span>
-            <span className="tl-label">{OPT_LABEL[d.optionId] ?? d.optionId}</span>
+            <span className="tl-body">
+              <span className="tl-label">{OPT_LABEL[d.optionId] ?? d.optionId}</span>
+              {d.alts?.map((a, i) => (
+                <span key={i} className="tl-alt">
+                  {a}
+                </span>
+              ))}
+            </span>
           </div>
         ))}
       </div>
+      <p className="micro dim">흐릿한 줄은 가보지 않은 갈림길입니다.</p>
 
       <h3>그날의 벤치 vs 나</h3>
       <div className="versus">
@@ -142,12 +184,23 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
       </div>
       <p className="micro dim">판정하지 않습니다. 기록을 나란히 둘 뿐입니다.</p>
 
-      <h3>결산</h3>
+      <h3>결산 {aiText && <span className="ai-badge">AI</span>}</h3>
       <div className="verdict">
-        {verdict.map((v, i) => (
-          <p key={i}>{v}</p>
-        ))}
+        {aiText ? <p>{aiText}</p> : verdict.map((v, i) => <p key={i}>{v}</p>)}
       </div>
+
+      {history.length > 1 && (
+        <>
+          <h3>지금까지 살아본 경우의 수</h3>
+          <div className="history-strip">
+            {history.map((h, i) => (
+              <span key={i} className={`hchip ${h.r}`}>
+                {h.k}-{h.o}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
 
       <button className="cta wide" onClick={props.onRetry}>
         다른 경우의 수를 살아보시겠습니까?

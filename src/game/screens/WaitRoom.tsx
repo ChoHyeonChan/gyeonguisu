@@ -72,7 +72,12 @@ export function WaitRoom(props: { result: MatchResult; score: [number, number]; 
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.team} className={`${r.isKorea ? 'kor' : ''} ${r.rank === ADVANCE_LINE ? 'line' : ''}`}>
+              <tr
+                key={r.team}
+                className={`${r.isKorea ? 'kor' : ''} ${r.rank === ADVANCE_LINE ? 'line' : ''} ${
+                  (r.team === '가나' && step === 1) || (r.team === 'DR콩고' && step === 2) ? 'hit' : ''
+                } ${r.isKorea && step >= maxStep ? 'doom' : ''}`}
+              >
                 <td>{r.rank}</td>
                 <td>
                   {r.team} <span className="dim">({r.group})</span>
