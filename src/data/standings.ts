@@ -41,8 +41,8 @@ export function thirdTableFor(korGf: number, korGa: number): ThirdRow[] {
 
 /** 6/27 밤(현지)의 두 경기 — 한국의 운명을 결정한 경기들 */
 export const FATE_MATCHES = [
-  { label: '크로아티아 2-1 가나', group: 'L', detail: '가나가 승점 4로 3위 유지 — 한국 위에 남는다' },
-  { label: 'DR콩고 3-1 우즈베키스탄', group: 'K', detail: 'DR콩고가 승점 4로 도약 — 한국 위로 올라선다' },
+  { label: '크로아티아 2-1 가나', group: 'L', detail: '가나가 승점 4로 3위를 지킵니다. 한국 위에 남습니다.' },
+  { label: 'DR콩고 3-1 우즈베키스탄', group: 'K', detail: 'DR콩고가 승점 4로 뛰어오릅니다. 한국 위로 올라섭니다.' },
 ] as const;
 
 /** 경기 전(6/24 킥오프 시점) A조 승점 — 확정 스코어 산술 */
