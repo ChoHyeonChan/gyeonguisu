@@ -49,10 +49,10 @@ export function WaitRoom(props: { result: MatchResult; score: [number, number]; 
         {FATE_MATCHES.map((m, i) => (
           <div key={m.label} className={`fate ${step >= i + 1 ? 'in' : ''}`}>
             {step >= i + 1 ? (
-              <>
+              <span className="fate-body">
                 <b>{m.label}</b>
-                <span className="dim"> — {m.detail}</span>
-              </>
+                <span className="dim">{m.detail}</span>
+              </span>
             ) : (
               <span className="dim">경기 진행 중…</span>
             )}

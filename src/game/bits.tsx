@@ -4,17 +4,24 @@ import type { Lineup } from '../engine/types';
 import { byNo } from '../data/players';
 import { fitOf } from '../engine/fitness';
 
+/** 방송 스코어벅 — 팀코드·정식명·스코어·전광판 시계 */
 export function Scoreboard(props: { minute: number; score: [number, number]; posture?: string }) {
   const { minute, score } = props;
-  const mm = minute >= 95 ? '90+' : `${minute}'`;
+  const mm = minute >= 95 ? "90+'" : `${minute}'`;
   return (
-    <div className="scoreboard">
-      <span className="team">KOR</span>
-      <span className="score">
-        {score[0]} : {score[1]}
-      </span>
-      <span className="team">RSA</span>
-      <span className="clock">{mm}</span>
+    <div className="scorebug">
+      <div className="sb-side">
+        <span className="sb-code">KOR</span>
+        <span className="sb-name">대한민국</span>
+      </div>
+      <div className="sb-score">
+        {score[0]}–{score[1]}
+      </div>
+      <div className="sb-side away">
+        <span className="sb-code">RSA</span>
+        <span className="sb-name">남아공</span>
+      </div>
+      <div className="sb-clock">{mm}</div>
     </div>
   );
 }

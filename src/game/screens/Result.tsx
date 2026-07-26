@@ -144,11 +144,7 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
             <span className="tl-min">{d.id === 'D1' ? '킥오프 전' : d.id === 'D3' ? 'HT' : `${d.minute}'`}</span>
             <span className="tl-body">
               <span className="tl-label">{OPT_LABEL[d.optionId] ?? d.optionId}</span>
-              {d.alts?.map((a, i) => (
-                <span key={i} className="tl-alt">
-                  {a}
-                </span>
-              ))}
+              {d.alts?.length ? <span className="tl-alt">{d.alts.join(' / ')}</span> : null}
             </span>
           </div>
         ))}

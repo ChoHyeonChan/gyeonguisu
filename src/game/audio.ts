@@ -140,6 +140,54 @@ class AudioEngine {
     this.ramp(0.14, 0.5);
   }
 
+  /** 브리핑 임팩트 — 중계 그래픽이 박히는 저음 히트 */
+  impact() {
+    if (!this.ctx || !this.master) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.28);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.6);
+
+    // 어택에 실린 짧은 노이즈 — 타격감
+    const len = Math.floor(this.ctx.sampleRate * 0.08);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const ns = this.ctx.createBufferSource();
+    ns.buffer = buf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1800;
+    const ng = this.ctx.createGain();
+    ng.gain.value = 0.12;
+    ns.connect(hp).connect(ng).connect(this.master);
+    ns.start(t);
+  }
+
+  /** 슬레이트 타이핑 — 짧은 클릭 */
+  tick() {
+    if (!this.ctx || !this.master) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = 'square';
+    o.frequency.value = 1400;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.03, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.06);
+  }
+
   toggle(): boolean {
     this.enabled = !this.enabled;
     if (this.ctx && this.master) {
