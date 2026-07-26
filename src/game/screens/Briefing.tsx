@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { GROUP_A_BEFORE } from '../../data/standings';
+import { audio } from '../audio';
 
 const BEATS = 4;
 const BEAT_MS = 2600;
@@ -15,7 +16,10 @@ export function Briefing(props: { onDone: () => void }) {
     return () => clearTimeout(t);
   }, [beat]);
 
-  const skip = () => setBeat((b) => Math.min(b + 1, BEATS - 1));
+  const skip = () => {
+    audio.unlock(); // 첫 사용자 제스처에서 오디오 언락 (모바일 오토플레이 정책)
+    setBeat((b) => Math.min(b + 1, BEATS - 1));
+  };
 
   return (
     <div className="screen briefing" onClick={skip}>
@@ -62,6 +66,7 @@ export function Briefing(props: { onDone: () => void }) {
             className="cta"
             onClick={(e) => {
               e.stopPropagation();
+              audio.unlock();
               props.onDone();
             }}
           >

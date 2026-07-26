@@ -214,6 +214,22 @@ h2 { font-size: 1.2rem; } h3 { font-size: 1rem; margin: 18px 0 8px; color: var(-
 .verdict p { margin-bottom: 6px; }
 .verdict p:last-child { margin-bottom: 0; }
 
+/* ── 고도화: 연출·드래그·강조 ──────────── */
+.goalflash { position: fixed; inset: 0; z-index: 35; pointer-events: none; animation: flashFade 0.9s ease-out forwards; }
+.goalflash.fk { background: radial-gradient(ellipse at center, rgba(87, 204, 153, 0.45), transparent 70%); }
+.goalflash.fo { background: radial-gradient(ellipse at center, rgba(255, 93, 93, 0.5), transparent 70%); }
+@keyframes flashFade { from { opacity: 1; } to { opacity: 0; } }
+
+.soundbtn { float: right; font-size: 0.95rem; padding: 0 6px; opacity: 0.8; }
+
+.d-effects em { font-style: normal; margin-right: 8px; }
+.d-effects em.warn { color: var(--red); font-weight: 800; animation: pulse 1.2s infinite; }
+
+.pitch .chip.drag { touch-action: none; }
+.chip.lift, .bchip.lift { z-index: 30; opacity: 0.92; }
+.chip.lift .no { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
+.chip.over .no { box-shadow: 0 0 0 5px rgba(255, 183, 3, 0.45); }
+
 /* ── 애니메이션 ────────────────────────── */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes sheetUp { from { transform: translateY(40%); opacity: 0.6; } to { transform: none; opacity: 1; } }

@@ -1,7 +1,7 @@
 // 티커 대본 바인딩 — 이벤트 → 문맥(스코어·전후반) → 문장 선택 → {P} 역할 슬롯 치환
 // UI 전용이라 Math.random 사용 (엔진 판정과 무관)
 
-import { TICKER, HEADLINES, WAITROOM, VERDICT_FALLBACK } from '../content/ticker.draft';
+import { TICKER, HEADLINES, WAITROOM, VERDICT_FALLBACK } from '../content/ticker';
 import { byNo } from '../data/players';
 import type { MatchEvent } from '../engine/types';
 
@@ -39,12 +39,15 @@ export function waitroomLine(key: keyof typeof WAITROOM): string {
   return pick(WAITROOM[key] as string[], `wr:${String(key)}`);
 }
 
-/** 규칙 기반 결산 서술 (LLM 폴백과 동일 소스 — D6에서 LLM이 이 자리를 대체) */
+/** 규칙 기반 결산 서술 (LLM 폴백과 동일 소스 — D6에서 LLM이 이 자리를 대체)
+ *  조립 순서: 결과 → 신뢰도 → 지시 → 교체 → 그날의 벤치 대조 → 앵커 (ticker.ts 주석의 규약) */
 export function verdictText(opts: {
   result: 'win' | 'draw' | 'loss';
   trust: number;
   ordersFailed: boolean;
   subsRemaining: number;
+  benchMatched: boolean;
+  anchorsSeen: boolean;
 }): string[] {
   const V = VERDICT_FALLBACK as Record<string, string[]>;
   const out: string[] = [];
@@ -55,5 +58,7 @@ export function verdictText(opts: {
   else out.push(pick(V.orders_clean ?? []));
   if (opts.subsRemaining === 0) out.push(pick(V.subs_exhausted ?? []));
   else if (opts.subsRemaining >= 3) out.push(pick(V.subs_conserved ?? []));
+  out.push(pick(opts.benchMatched ? (V.matched_bench ?? []) : (V.diverged_bench ?? [])));
+  if (opts.anchorsSeen) out.push(pick(V.anchors ?? []));
   return out.filter(Boolean);
 }

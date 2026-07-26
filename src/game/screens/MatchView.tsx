@@ -10,6 +10,7 @@ import { applyOption } from '../../engine/decisions';
 import * as B from '../../engine/balance';
 import { lineFor, headline } from '../content';
 import { Scoreboard, TrustBar, PitchView } from '../bits';
+import { audio } from '../audio';
 
 // ?fast=1 — 개발·시연영상 촬영용 배속 (심사 UX에는 영향 없음)
 const FAST = typeof location !== 'undefined' && new URLSearchParams(location.search).has('fast');
@@ -50,6 +51,8 @@ export function MatchView(props: {
   const [decision, setDecision] = useState<{ id: Exclude<DecisionId, 'D1'>; cards: DecisionOption[]; total: number } | null>(null);
   const [remain, setRemain] = useState(0);
   const [coachmark, setCoachmark] = useState(firstPlay);
+  const [flash, setFlash] = useState<null | 'k' | 'o'>(null);
+  const [sound, setSound] = useState(audio.enabled);
 
   const push = useCallback((item: Omit<FeedItem, 'id'>) => {
     setFeed((f) => [{ ...item, id: feedId.current++ }, ...f].slice(0, 40));
@@ -65,6 +68,7 @@ export function MatchView(props: {
     const t = TICK_STARTS[tickIdx.current];
     if (t === undefined) {
       st.finished = true;
+      audio.whistle();
       props.onFinished();
       return;
     }
@@ -72,6 +76,7 @@ export function MatchView(props: {
     if (pauseId && !st.decisions.some((d) => d.id === pauseId)) {
       const cards = cardsFor(pauseId, st);
       const total = secondsFor(pauseId, firstPlay);
+      audio.cut(); // 관중 소음 컷 — 서명 연출
       setDecision({ id: pauseId, cards, total });
       setRemain(total);
       return; // 시계가 멈춘다
@@ -82,6 +87,15 @@ export function MatchView(props: {
       const text = lineFor(e, st.score);
       if (!text) continue;
       const kind = e.key === 'KOR_GOAL' ? 'goal-k' : e.key === 'OPP_GOAL' ? 'goal-o' : e.key === 'ORDER_FAIL' ? 'fail' : 'info';
+      if (e.key === 'KOR_GOAL') {
+        audio.roar();
+        setFlash('k');
+        setTimeout(() => setFlash(null), 900);
+      } else if (e.key === 'OPP_GOAL') {
+        audio.groan();
+        setFlash('o');
+        setTimeout(() => setFlash(null), 900);
+      }
       push({ minute: e.minute > 90 ? '90+' : `${e.minute}'`, text, kind });
     }
     syncHud();
@@ -121,6 +135,7 @@ export function MatchView(props: {
     }
     setDecision(null);
     syncHud();
+    audio.resumeAmbient();
     timer.current = setTimeout(advance, 900);
   };
 
@@ -128,6 +143,7 @@ export function MatchView(props: {
   // 첫 판 코치마크가 떠 있는 동안은 킥오프하지 않는다 — 설명을 읽는 사이 결정을 뺏기면 안 된다
   useEffect(() => {
     if (coachmark) return;
+    audio.ambient();
     timer.current = setTimeout(advance, 1400);
     const onVis = () => {
       if (document.hidden && timer.current) {
@@ -150,10 +166,18 @@ export function MatchView(props: {
 
   return (
     <div className={`screen match ${paused ? 'paused' : ''}`}>
+      {flash && <div className={`goalflash ${flash === 'k' ? 'fk' : 'fo'}`} />}
       <Scoreboard minute={hud.minute} score={hud.score} />
       <TrustBar trust={hud.trust} />
       <div className="subinfo dim">
         교체 {hud.subs}장 · 윈도우 {st.windowsRemaining}회
+        <button
+          className="soundbtn"
+          title="소리 켜기/끄기"
+          onClick={() => setSound(audio.toggle())}
+        >
+          {sound ? '🔊' : '🔇'}
+        </button>
       </div>
 
       <PitchView lineup={st.lineup} small />
@@ -200,7 +224,14 @@ export function MatchView(props: {
                 onClick={() => choose(c.id)}
               >
                 <span className="d-coach">{c.coach}</span>
-                <span className="d-effects">{c.disabled ?? c.effects.join(' · ')}</span>
+                <span className="d-effects">
+                  {c.disabled ??
+                    c.effects.map((e, i) => (
+                      <em key={i} className={e.includes('전달될 확률') ? 'warn' : ''}>
+                        {e}
+                      </em>
+                    ))}
+                </span>
               </button>
             ))}
             <p className="d-warn">⚠ 시간이 다 가면, 개입하지 않은 것이 됩니다.</p>

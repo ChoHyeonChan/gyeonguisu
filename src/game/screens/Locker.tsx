@@ -1,15 +1,76 @@
-// P2 라커룸 — 선발 배치(탭-투-배치) + 포메이션 프리셋 + D1 확인 모달
+// P2 라커룸 — 이중 조작계 (기획서 §5-4): 데스크톱 드래그(dnd-kit) + 모바일 탭-투-배치
 // 기본값은 그날의 실제 선발. '경기 시작' 시 주장이 벤치면 1회 확인이 뜬다 (기획서 §4 P2)
 
 import { useMemo, useState } from 'react';
-import type { Lineup, FormationKey } from '../../engine/types';
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import type { Lineup, FormationKey, Slot } from '../../engine/types';
 import { SQUAD, byNo } from '../../data/players';
 import { realLineup, slotsOf } from '../../engine/formations';
-import { PitchView } from '../bits';
+import { fitOf } from '../../engine/fitness';
+import { audio } from '../audio';
 
 export interface D1Result {
   lineup: Lineup;
   sonStarts: boolean;
+}
+
+/** 슬롯 칩 — 드래그 가능 + 드롭 대상 (탭 배치도 그대로 동작) */
+function SlotChip(props: {
+  slot: Slot;
+  playerNo: number;
+  selected: boolean;
+  onTap: () => void;
+}) {
+  const { slot, playerNo, selected } = props;
+  const drag = useDraggable({ id: `slot:${slot.id}` });
+  const drop = useDroppable({ id: `drop:${slot.id}` });
+  const p = byNo(playerNo);
+  const fit = fitOf(playerNo, slot.band);
+  const cls = fit >= 1 ? '' : fit >= 0.8 ? 'adj' : 'misfit';
+  const tf = drag.transform ? `translate(-50%,-50%) translate(${drag.transform.x}px, ${drag.transform.y}px)` : undefined;
+  return (
+    <button
+      ref={(el) => {
+        drag.setNodeRef(el);
+        drop.setNodeRef(el);
+      }}
+      {...drag.listeners}
+      {...drag.attributes}
+      className={`chip drag ${cls} ${slot.band === 'GK' ? 'gk' : ''} ${selected ? 'sel' : ''} ${drop.isOver ? 'over' : ''} ${drag.isDragging ? 'lift' : ''}`}
+      style={{ left: `${slot.x}%`, top: `${slot.y}%`, transform: tf }}
+      onClick={props.onTap}
+    >
+      <span className="no">{p.no}</span>
+      <span className="nm">{p.name}</span>
+    </button>
+  );
+}
+
+function BenchChip(props: { no: number; selected: boolean; onTap: () => void }) {
+  const drag = useDraggable({ id: `bench:${props.no}` });
+  const p = byNo(props.no);
+  const tf = drag.transform ? `translate(${drag.transform.x}px, ${drag.transform.y}px)` : undefined;
+  return (
+    <button
+      ref={drag.setNodeRef}
+      {...drag.listeners}
+      {...drag.attributes}
+      className={`bchip ${props.selected ? 'sel' : ''} ${props.no === 7 ? 'star' : ''} ${drag.isDragging ? 'lift' : ''}`}
+      style={{ transform: tf, zIndex: drag.isDragging ? 30 : undefined }}
+      onClick={props.onTap}
+    >
+      <span className="no">{p.no}</span>
+      <span className="nm">{p.name}</span>
+    </button>
+  );
 }
 
 export function Locker(props: { onStart: (d1: D1Result) => void }) {
@@ -18,8 +79,29 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
   const [selBench, setSelBench] = useState<number | null>(null);
   const [confirmSon, setConfirmSon] = useState(false);
 
+  // 탭과 드래그 공존: 8px 이상 움직여야 드래그로 인식, 그 미만은 클릭으로 전달
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
   const placedNos = lineup.placements.map((p) => p.playerNo);
   const bench = useMemo(() => SQUAD.filter((p) => !placedNos.includes(p.no)), [placedNos]);
+
+  const placeFromBench = (no: number, slotId: string) =>
+    setLineup((lu) => ({
+      ...lu,
+      placements: lu.placements.map((p) => (p.slotId === slotId ? { ...p, playerNo: no } : p)),
+    }));
+
+  const swapSlots = (a: string, b: string) =>
+    setLineup((lu) => {
+      const pa = lu.placements.find((p) => p.slotId === a)!;
+      const pb = lu.placements.find((p) => p.slotId === b)!;
+      return {
+        ...lu,
+        placements: lu.placements.map((p) =>
+          p.slotId === a ? { ...p, playerNo: pb.playerNo } : p.slotId === b ? { ...p, playerNo: pa.playerNo } : p,
+        ),
+      };
+    });
 
   const setFormation = (key: Exclude<FormationKey, 'custom'>) => {
     const slots = slotsOf(key);
@@ -34,46 +116,37 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
 
   const tapSlot = (slotId: string) => {
     if (selBench != null) {
-      // 벤치 선수를 이 슬롯에 투입 (기존 선수는 벤치로)
-      setLineup((lu) => ({
-        ...lu,
-        placements: lu.placements.map((p) => (p.slotId === slotId ? { ...p, playerNo: selBench } : p)),
-      }));
+      placeFromBench(selBench, slotId);
       setSelBench(null);
       return;
     }
-    if (selSlot == null) {
-      setSelSlot(slotId);
-      return;
-    }
-    if (selSlot === slotId) {
-      setSelSlot(null);
-      return;
-    }
-    // 슬롯 ↔ 슬롯 스왑
-    setLineup((lu) => {
-      const a = lu.placements.find((p) => p.slotId === selSlot)!;
-      const b = lu.placements.find((p) => p.slotId === slotId)!;
-      return {
-        ...lu,
-        placements: lu.placements.map((p) =>
-          p.slotId === selSlot ? { ...p, playerNo: b.playerNo } : p.slotId === slotId ? { ...p, playerNo: a.playerNo } : p,
-        ),
-      };
-    });
+    if (selSlot == null) return setSelSlot(slotId);
+    if (selSlot === slotId) return setSelSlot(null);
+    swapSlots(selSlot, slotId);
     setSelSlot(null);
   };
 
-  const start = () => {
-    if (!placedNos.includes(7)) {
-      setConfirmSon(true); // 주장이 벤치 — 이것이 결정이었음을 알게 한다
-    } else {
-      props.onStart({ lineup, sonStarts: true });
+  const onDragEnd = (ev: DragEndEvent) => {
+    const a = String(ev.active.id);
+    const over = ev.over ? String(ev.over.id) : null;
+    if (!over || !over.startsWith('drop:')) return;
+    const slotId = over.slice(5);
+    if (a.startsWith('bench:')) placeFromBench(Number(a.slice(6)), slotId);
+    else if (a.startsWith('slot:')) {
+      const from = a.slice(5);
+      if (from !== slotId) swapSlots(from, slotId);
     }
+    setSelSlot(null);
+    setSelBench(null);
+  };
+
+  const start = () => {
+    audio.unlock();
+    if (!placedNos.includes(7)) setConfirmSon(true);
+    else props.onStart({ lineup, sonStarts: true });
   };
 
   const sonToXI = () => {
-    // 주장 투입: 11 황희찬 자리 우선, 없으면 첫 FW 밴드 슬롯
     setLineup((lu) => {
       const spot =
         lu.placements.find((p) => p.playerNo === 11) ??
@@ -103,32 +176,47 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
         </button>
       </div>
 
-      <PitchView lineup={lineup} selectedSlot={selSlot} onSlotTap={tapSlot} />
-
-      <div className="bench-strip">
-        <span className="bench-label">벤치</span>
-        <div className="bench-list">
-          {bench.map((p) => (
-            <button
-              key={p.no}
-              className={`bchip ${selBench === p.no ? 'sel' : ''} ${p.no === 7 ? 'star' : ''}`}
-              onClick={() => {
-                setSelBench(selBench === p.no ? null : p.no);
-                setSelSlot(null);
-              }}
-            >
-              <span className="no">{p.no}</span>
-              <span className="nm">{p.name}</span>
-            </button>
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <div className="pitch">
+          <div className="pline half" />
+          <div className="pline circle" />
+          <div className="pline boxT" />
+          <div className="pline boxB" />
+          {lineup.placements.map((pl) => (
+            <SlotChip
+              key={pl.slotId}
+              slot={lineup.slots.find((s) => s.id === pl.slotId)!}
+              playerNo={pl.playerNo}
+              selected={selSlot === pl.slotId}
+              onTap={() => tapSlot(pl.slotId)}
+            />
           ))}
         </div>
-      </div>
+
+        <div className="bench-strip">
+          <span className="bench-label">벤치 · 끌어다 놓거나, 탭한 뒤 자리를 탭하세요</span>
+          <div className="bench-list">
+            {bench.map((p) => (
+              <BenchChip
+                key={p.no}
+                no={p.no}
+                selected={selBench === p.no}
+                onTap={() => {
+                  setSelBench(selBench === p.no ? null : p.no);
+                  setSelSlot(null);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </DndContext>
+
       <p className="hint dim">
         {selBench != null
-          ? `${byNo(selBench).name} 선택됨 — 넣을 자리를 탭하세요`
+          ? `${byNo(selBench).name} 선택됨. 넣을 자리를 탭하세요`
           : selSlot != null
             ? '바꿀 자리를 탭하세요 (같은 자리를 다시 탭하면 취소)'
-            : '선수를 탭한 뒤 자리를 탭하면 배치됩니다'}
+            : '투톱에 양 날개도, 수비 일곱도 가능합니다. 결과까지 감독의 몫입니다'}
       </p>
 
       <button className="cta wide" onClick={start}>

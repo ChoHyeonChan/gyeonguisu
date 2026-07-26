@@ -4,7 +4,7 @@ import type { MatchState, MatchResult } from '../../engine/types';
 import { REAL_BENCH_MOVES, byNo } from '../../data/players';
 import { groupAfter } from '../../data/standings';
 import { headline, verdictText } from '../content';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 const OPT_LABEL: Record<string, string> = {
   'd1-start': '주장 선발',
@@ -34,6 +34,12 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
   const [k, o] = s.score;
   const ftKey = result === 'win' ? 'ft_win' : result === 'draw' ? 'ft_draw' : 'ft_loss';
   const hl = useMemo(() => headline(ftKey as 'ft_win'), [ftKey]);
+  // 그날의 벤치와의 유사도: 실제 5교체의 투입 선수와 나의 투입 선수 교집합이 3명 이상이면 '같은 길'
+  const benchMatched = useMemo(() => {
+    const realOns = new Set<number>(REAL_BENCH_MOVES.map((m) => m.on));
+    const mine = s.usedSubs.filter((u) => realOns.has(u.on)).length;
+    return mine >= 3;
+  }, [s]);
   const verdict = useMemo(
     () =>
       verdictText({
@@ -41,10 +47,38 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
         trust: s.trust,
         ordersFailed: s.events.some((e) => e.key === 'ORDER_FAIL'),
         subsRemaining: s.subsRemaining,
+        benchMatched,
+        anchorsSeen: s.events.some((e) => e.key === 'ANCHOR_HEADER' || e.key === 'ANCHOR_DOUBLESAVE' || e.key === 'ANCHOR_SUBCROSS'),
       }),
-    [result, s],
+    [result, s, benchMatched],
   );
   const table = groupAfter(result, k, o);
+  const [copied, setCopied] = useState(false);
+
+  const share = async () => {
+    const path = s.decisions.map((d) => OPT_LABEL[d.optionId] ?? d.optionId).join(' → ');
+    const text = [
+      '경우의 수 — 그날, 몬테레이의 벤치',
+      `KOR ${k} : ${o} RSA`,
+      `나의 다섯 결정: ${path}`,
+      result === 'loss' ? '나도 경우의 수 앞에 섰다.' : '나는 그 밤을 바꿨다.',
+    ].join('\n');
+    try {
+      if (navigator.share) {
+        await navigator.share({ text });
+        return;
+      }
+      throw new Error('no-share');
+    } catch {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        /* 클립보드도 막힌 환경이면 조용히 무시 */
+      }
+    }
+  };
 
   return (
     <div className="screen result">
@@ -117,6 +151,9 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
 
       <button className="cta wide" onClick={props.onRetry}>
         다른 경우의 수를 살아보시겠습니까?
+      </button>
+      <button className="ghost wide" onClick={share}>
+        {copied ? '복사되었습니다' : '나의 다섯 결정 공유하기'}
       </button>
       <p className="micro dim center">본 서비스는 실제 경기 기록에 기반한 가상 시뮬레이션입니다.</p>
     </div>
