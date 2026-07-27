@@ -100,15 +100,27 @@ body::after {
 /* ══ P1 브리핑 — 중계 콜드 오픈 ═══════════════════ */
 /* 콘텐츠와 진행바가 auto 마진으로 여백을 나눠 갖는다 → 어떤 높이에서도 세로 중앙 */
 .briefing { gap: 0; cursor: pointer; position: relative; overflow: hidden; }
-/* 몬테레이 밤, 조명 글로우 */
-.briefing::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse 70% 40% at 50% 12%, rgba(120, 165, 220, 0.14), transparent 70%);
-  animation: lightsUp 2.4s ease-out both;
+/* 몬테레이의 밤 — 영상 배경 + 가독성을 위한 딥 오버레이 */
+.brief-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  z-index: 0; opacity: 0.95; filter: brightness(1.35) contrast(1.05) saturate(0.9);
+  animation: lightsUp 2.6s ease-out both;
 }
-@keyframes lightsUp { from { opacity: 0; } to { opacity: 1; } }
+/* 글자가 놓이는 중앙 띠만 어둡게 눌러 가독성을 지킨다 */
+.briefing::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(8,12,20,0.45) 0%,
+    rgba(8,12,20,0.2) 22%,
+    rgba(8,12,20,0.78) 42%,
+    rgba(8,12,20,0.86) 72%,
+    rgba(8,12,20,0.5) 100%
+  );
+}
+@keyframes lightsUp { from { opacity: 0; } to { opacity: 0.95; } }
 
-.slate { position: relative; z-index: 1; margin-top: auto; }
+.slate { position: relative; z-index: 2; margin-top: auto; }
 .slate-line {
   display: block; width: max-content; max-width: 100%;
   font-family: var(--num); font-size: 0.9rem; letter-spacing: 0.3em;
@@ -125,7 +137,7 @@ body::after {
 @keyframes caret { 50% { border-color: transparent; } }
 
 /* 결과 카드가 좌우에서 박힌다 */
-.beat { position: relative; z-index: 1; margin-top: auto; }
+.beat { position: relative; z-index: 2; margin-top: auto; }
 .result-slam {
   display: flex; align-items: stretch; gap: 0;
   background: var(--slate); border-left: 5px solid var(--fog);
@@ -197,10 +209,10 @@ body::after {
 .mcase.bad { border-left-color: var(--red); }
 .mcase.bad b { color: var(--red); }
 
-.beat-progress { display: flex; gap: 4px; margin-top: auto; padding-top: 26px; }
+.beat-progress { display: flex; gap: 4px; margin-top: auto; padding-top: 26px; position: relative; z-index: 2; }
 .beat-progress i { flex: 1; height: 2px; background: var(--line); transition: background 0.3s ease; }
 .beat-progress i.on { background: var(--red); }
-.tap-hint { font-size: 0.66rem; color: var(--fog); letter-spacing: 0.16em; margin-top: 10px; opacity: 0.65; }
+.tap-hint { font-size: 0.66rem; color: var(--fog); letter-spacing: 0.16em; margin-top: 10px; opacity: 0.65; position: relative; z-index: 2; }
 .sound-cue {
   margin-top: 20px; border: 1px solid var(--line); color: var(--fog);
   font-size: 0.74rem; padding: 8px 14px; letter-spacing: 0.02em;

@@ -46,6 +46,18 @@ export function Briefing(props: { onDone: () => void }) {
 
   return (
     <div className="screen briefing" onClick={advance}>
+      {/* 몬테레이의 밤 — 자체 생성 영상. 실패해도 아래 그라디언트가 남는다 */}
+      <video
+        className="brief-bg"
+        src="/intro.mp4"
+        poster="/intro-poster.jpg"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+      />
       {beat === 0 && (
         <div className="slate">
           <div className="slate-line">2026.06.24 · MONTERREY</div>
