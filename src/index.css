@@ -374,6 +374,53 @@ body::after {
 .d-effects em.warn { color: var(--red); font-weight: 900; animation: pulse 1.2s infinite; }
 .d-warn { font-size: 0.72rem; color: var(--amber); margin-top: 8px; letter-spacing: 0.02em; }
 
+/* ── 라이브 피치 ─────────────────────────── */
+.pitch.live { aspect-ratio: 3 / 2.4; }
+.pitch.live .lines { position: absolute; inset: 0; transition: transform 1.1s cubic-bezier(.4,0,.2,1); }
+.dot {
+  position: absolute; transform: translate(-50%, -50%);
+  transition: left 1.1s cubic-bezier(.4,0,.2,1), top 1.1s cubic-bezier(.4,0,.2,1);
+}
+.dot span {
+  display: block; width: 21px; height: 21px; line-height: 19px; text-align: center;
+  background: rgba(8, 12, 20, 0.88); border: 1.5px solid var(--chalk); color: #fff;
+  font-family: var(--num); font-style: italic; font-weight: 900; font-size: 0.66rem;
+}
+.dot.gk span { border-color: var(--amber); color: var(--amber); }
+.ball {
+  position: absolute; width: 11px; height: 11px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 2px 6px rgba(0,0,0,0.6);
+  transform: translate(-50%, -50%); transition-property: left, top;
+  transition-timing-function: cubic-bezier(.32,.72,.4,1); z-index: 4;
+}
+.shotline { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+.shotline line { stroke: #fff; stroke-width: 0.7; stroke-dasharray: 3 2; opacity: 0.85; animation: shotFade 0.42s ease-out forwards; }
+@keyframes shotFade { from { opacity: 0.95; } to { opacity: 0; } }
+
+.match.shake { animation: shakeIt 0.5s cubic-bezier(.36,.07,.19,.97); }
+@keyframes shakeIt {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(3px); }
+  30%, 50%, 70% { transform: translateX(-5px); }
+  40%, 60% { transform: translateX(5px); }
+}
+
+/* ── 교체 직접 선택 시트 ──────────────────── */
+.decision-sheet.picker { max-height: 82dvh; overflow-y: auto; }
+.pick-lead { font-size: 0.88rem; margin-bottom: 10px; }
+.pick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.pick-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--slate); border: 1px solid var(--line); padding: 8px 4px;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.pick-chip:hover, .pick-chip:active { border-color: var(--red); background: var(--slate-2); }
+.pick-chip .no { font-family: var(--num); font-style: italic; font-weight: 900; font-size: 0.9rem; color: #fff; }
+.pick-chip .nm { font-size: 0.6rem; color: var(--fog); white-space: nowrap; }
+.pick-actions { display: flex; gap: 8px; align-items: center; }
+.pick-actions .cta { margin-top: 0; flex: 1; padding: 11px; }
+.pick-actions .ghost { padding: 11px 16px; }
+
 .goalflash { position: fixed; inset: 0; z-index: 70; pointer-events: none; animation: flashFade 0.9s ease-out forwards; }
 .goalflash.fk { background: radial-gradient(ellipse at center, rgba(255,176,0,0.42), transparent 68%); }
 .goalflash.fo { background: radial-gradient(ellipse at center, rgba(214,0,43,0.5), transparent 68%); }

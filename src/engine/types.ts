@@ -58,6 +58,7 @@ export interface DecisionOption {
   disabled?: string;        // 비활성 사유 ("조커 카드가 없습니다…")
   isOrder?: boolean;        // D2/D5 자세 변경 = '지시' (신뢰도 실행 롤 대상)
   subsCost?: number;        // 교체 소모 장수
+  manual?: boolean;         // 교체 대상을 감독이 직접 고른다 (UI가 선택 시트를 연다)
   apply: EffectSpec;
 }
 

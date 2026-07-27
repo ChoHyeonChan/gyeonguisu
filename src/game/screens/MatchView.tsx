@@ -1,18 +1,19 @@
 // P3 매치 — 압축 90분. 엔진 flow와 동일한 순서를 틱 단위로 재생한다.
-// 결정의 순간: 정지 → 채도 하락·비네팅 → 카드 시트 + 카운트다운 (무음 환경에서도 성립하는 시각 신호)
+// 공이 실제로 움직이고 라인이 밀고 당긴다. 결정의 순간에는 시간이 멈추고 관중 소음이 끊긴다.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { MatchState, DecisionId, DecisionOption } from '../../engine/types';
 import type { Rng } from '../../engine/rng';
-import { runTick, TICK_STARTS, clampTrust } from '../../engine/engine';
+import { runTick, TICK_STARTS, clampTrust, applySubs } from '../../engine/engine';
 import { cardsFor } from '../../engine/flow';
 import { applyOption } from '../../engine/decisions';
 import * as B from '../../engine/balance';
+import { byNo, SQUAD } from '../../data/players';
 import { lineFor, headline } from '../content';
-import { Scoreboard, TrustBar, PitchView } from '../bits';
+import { Scoreboard, TrustBar } from '../bits';
+import { LivePitch, seqFor, type Waypoint } from '../livepitch';
 import { audio } from '../audio';
 
-// ?fast=1 — 개발·시연영상 촬영용 배속 (심사 UX에는 영향 없음)
 const FAST = typeof location !== 'undefined' && new URLSearchParams(location.search).has('fast');
 const TICK_MS = FAST ? 700 : 5200;
 
@@ -43,16 +44,22 @@ export function MatchView(props: {
   const tickIdx = useRef(0);
   const feedId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clockTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const seqNo = useRef(0);
 
   const [feed, setFeed] = useState<FeedItem[]>(() => [
     { id: feedId.current++, minute: '—', text: props.d1Headline, kind: 'sys' },
   ]);
-  const [hud, setHud] = useState({ minute: 0, score: s.score, trust: s.trust, subs: s.subsRemaining });
+  const [hud, setHud] = useState({ score: s.score, trust: s.trust, subs: s.subsRemaining });
+  const [clock, setClock] = useState(0);
   const [decision, setDecision] = useState<{ id: Exclude<DecisionId, 'D1'>; cards: DecisionOption[]; total: number } | null>(null);
   const [remain, setRemain] = useState(0);
   const [coachmark, setCoachmark] = useState(firstPlay);
   const [flash, setFlash] = useState<null | 'k' | 'o'>(null);
+  const [shake, setShake] = useState(false);
   const [sound, setSound] = useState(audio.enabled);
+  const [seq, setSeq] = useState<Waypoint[] | null>(null);
+  const [picker, setPicker] = useState<{ id: Exclude<DecisionId, 'D1'>; off: number | null } | null>(null);
 
   const push = useCallback((item: Omit<FeedItem, 'id'>) => {
     setFeed((f) => [{ ...item, id: feedId.current++ }, ...f].slice(0, 40));
@@ -60,8 +67,19 @@ export function MatchView(props: {
 
   const syncHud = useCallback(() => {
     const st = stateRef.current!;
-    setHud({ minute: st.minute, score: [...st.score] as [number, number], trust: st.trust, subs: st.subsRemaining });
+    setHud({ score: [...st.score] as [number, number], trust: st.trust, subs: st.subsRemaining });
   }, [stateRef]);
+
+  /** 경기 시계를 구간 안에서 부드럽게 흐르게 한다 (틱 점프가 아니라 생중계처럼) */
+  const runClock = useCallback((from: number, to: number, ms: number) => {
+    if (clockTimer.current) clearInterval(clockTimer.current);
+    const t0 = performance.now();
+    clockTimer.current = setInterval(() => {
+      const p = Math.min(1, (performance.now() - t0) / ms);
+      setClock(Math.round(from + (to - from) * p));
+      if (p >= 1 && clockTimer.current) clearInterval(clockTimer.current);
+    }, 120);
+  }, []);
 
   const advance = useCallback(() => {
     const st = stateRef.current!;
@@ -76,33 +94,52 @@ export function MatchView(props: {
     if (pauseId && !st.decisions.some((d) => d.id === pauseId)) {
       const cards = cardsFor(pauseId, st);
       const total = secondsFor(pauseId, firstPlay);
-      audio.cut(); // 관중 소음 컷 — 서명 연출
+      audio.cut();
+      if (clockTimer.current) clearInterval(clockTimer.current);
+      setClock(t);
       setDecision({ id: pauseId, cards, total });
       setRemain(total);
-      return; // 시계가 멈춘다
+      return;
     }
+
     const events = runTick(st, t, rng);
     tickIdx.current += 1;
+    runClock(t, t >= 90 ? 95 : t + 5, TICK_MS);
+
+    // 이 틱의 대표 이벤트로 공 궤적을 정한다 (득점 > 찬스 > 흐름)
+    const lead =
+      events.find((e) => e.key === 'KOR_GOAL' || e.key === 'OPP_GOAL') ??
+      events.find((e) => e.key.startsWith('ANCHOR')) ??
+      events[0];
+    if (lead) {
+      seqNo.current += 1;
+      setSeq(seqFor(lead.key));
+    }
+
     for (const e of events) {
       const text = lineFor(e, st.score);
       if (!text) continue;
       const kind = e.key === 'KOR_GOAL' ? 'goal-k' : e.key === 'OPP_GOAL' ? 'goal-o' : e.key === 'ORDER_FAIL' ? 'fail' : 'info';
-      if (e.key === 'KOR_GOAL') {
-        audio.roar();
-        setFlash('k');
-        setTimeout(() => setFlash(null), 900);
-      } else if (e.key === 'OPP_GOAL') {
-        audio.groan();
-        setFlash('o');
-        setTimeout(() => setFlash(null), 900);
+      if (e.key === 'KOR_GOAL' || e.key === 'OPP_GOAL') {
+        const kor = e.key === 'KOR_GOAL';
+        // 공이 골문에 닿는 순간에 맞춰 터뜨린다
+        setTimeout(() => {
+          if (kor) audio.roar();
+          else audio.groan();
+          setFlash(kor ? 'k' : 'o');
+          setShake(true);
+          setTimeout(() => setFlash(null), 900);
+          setTimeout(() => setShake(false), 520);
+        }, 1500);
+        setTimeout(() => push({ minute: e.minute > 90 ? '90+' : `${e.minute}'`, text, kind }), 1500);
+        continue;
       }
       push({ minute: e.minute > 90 ? '90+' : `${e.minute}'`, text, kind });
     }
     syncHud();
     timer.current = setTimeout(advance, TICK_MS);
-  }, [firstPlay, props, push, rng, stateRef, syncHud]);
+  }, [firstPlay, props, push, rng, runClock, stateRef, syncHud]);
 
-  // 결정 카운트다운 — 만료 시 "개입하지 않음"
   useEffect(() => {
     if (!decision) return;
     if (remain <= 0) {
@@ -114,13 +151,27 @@ export function MatchView(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decision, remain]);
 
+  const resume = () => {
+    setDecision(null);
+    setPicker(null);
+    syncHud();
+    audio.resumeAmbient();
+    timer.current = setTimeout(advance, 900);
+  };
+
   const choose = (optId: string | null) => {
     const st = stateRef.current!;
     const d = decision!;
     const opt = optId ? d.cards.find((c) => c.id === optId) : undefined;
     const minute = TICK_STARTS[tickIdx.current];
-    // 가보지 않은 갈림길 — 결산 리플레이에서 흐릿하게 남는다 (기획서 P5)
     const alts = d.cards.filter((c) => !c.disabled && c.id !== optId).map((c) => c.coach.replace(/"/g, ''));
+
+    // 직접 고르기 — 선택 시트를 연다. 결정은 시트를 닫을 때 확정된다
+    if (opt?.manual) {
+      setPicker({ id: d.id, off: null });
+      return;
+    }
+
     if (opt && !opt.disabled) {
       applyOption(st, opt, rng, { atHT: d.id === 'D3' });
       st.decisions.push({ id: d.id, optionId: opt.id, minute, alts });
@@ -135,14 +186,42 @@ export function MatchView(props: {
       const key = k > o ? 'ht_leading' : k < o ? 'ht_trailing' : 'ht_level';
       push({ minute: 'HT', text: headline(key as 'ht_leading'), kind: 'sys' });
     }
-    setDecision(null);
-    syncHud();
-    audio.resumeAmbient();
-    timer.current = setTimeout(advance, 900);
+    resume();
   };
 
-  // 경기 시작 + 탭 비활성 시 자동 일시정지 (백그라운드 스로틀 대응)
-  // 첫 판 코치마크가 떠 있는 동안은 킥오프하지 않는다 — 설명을 읽는 사이 결정을 뺏기면 안 된다
+  /** 직접 교체 확정 — 한 명씩, 자원이 남는 한 반복할 수 있다 */
+  const doSwap = (on: number) => {
+    const st = stateRef.current!;
+    const off = picker!.off!;
+    try {
+      applySubs(st, [{ off, on }], picker!.id === 'D3', rng);
+      st.atkScalar += 0.06;
+      push({
+        minute: `${TICK_STARTS[tickIdx.current]}'`,
+        text: `교체 · ${byNo(off).name} 나가고 ${byNo(on).name} 들어갑니다.`,
+        kind: 'sys',
+      });
+    } catch {
+      /* 자원 부족 등 — 조용히 무시하고 시트를 닫는다 */
+    }
+    syncHud();
+    setPicker({ id: picker!.id, off: null });
+  };
+
+  const closePicker = () => {
+    const st = stateRef.current!;
+    const d = decision!;
+    const minute = TICK_STARTS[tickIdx.current];
+    const alts = d.cards.filter((c) => !c.disabled && c.id !== `${d.id.toLowerCase()}-manual`).map((c) => c.coach.replace(/"/g, ''));
+    st.decisions.push({ id: d.id, optionId: `${d.id.toLowerCase()}-manual`, minute, alts });
+    if (d.id === 'D3') {
+      const [k, o] = st.score;
+      const key = k > o ? 'ht_leading' : k < o ? 'ht_trailing' : 'ht_level';
+      push({ minute: 'HT', text: headline(key as 'ht_leading'), kind: 'sys' });
+    }
+    resume();
+  };
+
   useEffect(() => {
     if (coachmark) return;
     audio.ambient();
@@ -159,30 +238,28 @@ export function MatchView(props: {
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       if (timer.current) clearTimeout(timer.current);
+      if (clockTimer.current) clearInterval(clockTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachmark]);
 
   const paused = decision != null;
   const st = stateRef.current!;
+  const benchList = SQUAD.filter((p) => !st.onPitch.includes(p.no));
 
   return (
-    <div className={`screen match ${paused ? 'paused' : ''}`}>
+    <div className={`screen match ${paused ? 'paused' : ''} ${shake ? 'shake' : ''}`}>
       {flash && <div className={`goalflash ${flash === 'k' ? 'fk' : 'fo'}`} />}
-      <Scoreboard minute={hud.minute} score={hud.score} />
+      <Scoreboard minute={clock} score={hud.score} />
       <TrustBar trust={hud.trust} />
       <div className="subinfo dim">
         교체 {hud.subs}장 · 윈도우 {st.windowsRemaining}회
-        <button
-          className="soundbtn"
-          title="소리 켜기/끄기"
-          onClick={() => setSound(audio.toggle())}
-        >
+        <button className="soundbtn" title="소리 켜기/끄기" onClick={() => setSound(audio.toggle())}>
           {sound ? '🔊' : '🔇'}
         </button>
       </div>
 
-      <PitchView lineup={st.lineup} small />
+      <LivePitch lineup={st.lineup} onPitch={st.onPitch} seq={seq} seqId={seqNo.current} paused={paused} />
 
       <div className="feed">
         {feed.map((f) => (
@@ -196,15 +273,14 @@ export function MatchView(props: {
       {coachmark && (
         <div className="coachmark" onClick={() => setCoachmark(false)}>
           <p>
-            경기는 자동으로 흐릅니다. <b>결정의 순간</b>에만 시간이 멈추고, 제한시간이 지나면{' '}
-            <b>개입하지 않은 것</b>이 됩니다.
+            경기는 자동으로 흐릅니다. <b>결정의 순간</b>에만 시간이 멈추고, 제한시간이 지나면 <b>개입하지 않은 것</b>이 됩니다.
           </p>
           <p className="dim">신뢰 게이지가 40 아래로 내려가면, 지시가 그라운드에 전달되지 않을 수 있습니다.</p>
           <button className="cta">알겠습니다</button>
         </div>
       )}
 
-      {paused && decision && (
+      {paused && decision && !picker && (
         <div className="decision-back">
           <div className="vignette" />
           <div className="decision-sheet">
@@ -219,12 +295,7 @@ export function MatchView(props: {
             </div>
             <div className="d-remain">{remain}초</div>
             {decision.cards.map((c) => (
-              <button
-                key={c.id}
-                className={`d-card ${c.disabled ? 'off' : ''}`}
-                disabled={!!c.disabled}
-                onClick={() => choose(c.id)}
-              >
+              <button key={c.id} className={`d-card ${c.disabled ? 'off' : ''}`} disabled={!!c.disabled} onClick={() => choose(c.id)}>
                 <span className="d-coach">{c.coach}</span>
                 <span className="d-effects">
                   {c.disabled ??
@@ -237,6 +308,47 @@ export function MatchView(props: {
               </button>
             ))}
             <p className="d-warn">⚠ 시간이 다 가면, 개입하지 않은 것이 됩니다.</p>
+          </div>
+        </div>
+      )}
+
+      {picker && (
+        <div className="decision-back">
+          <div className="vignette" />
+          <div className="decision-sheet picker">
+            <div className="d-head">
+              <span className="d-id">{picker.off == null ? '뺄 선수' : '넣을 선수'}</span>
+              <span className="d-score">
+                교체 {st.subsRemaining}장 남음
+              </span>
+            </div>
+            {picker.off != null && (
+              <p className="pick-lead">
+                <b>{byNo(picker.off).name}</b> 나갑니다. 대신 누구를 넣습니까?
+              </p>
+            )}
+            <div className="pick-grid">
+              {(picker.off == null ? st.onPitch.map((n) => byNo(n)) : benchList).map((p) => (
+                <button
+                  key={p.no}
+                  className="pick-chip"
+                  onClick={() => (picker.off == null ? setPicker({ ...picker, off: p.no }) : doSwap(p.no))}
+                >
+                  <span className="no">{p.no}</span>
+                  <span className="nm">{p.name}</span>
+                </button>
+              ))}
+            </div>
+            <div className="pick-actions">
+              {picker.off != null && (
+                <button className="ghost" onClick={() => setPicker({ ...picker, off: null })}>
+                  뒤로
+                </button>
+              )}
+              <button className="cta" onClick={closePicker}>
+                교체 마치기
+              </button>
+            </div>
           </div>
         </div>
       )}

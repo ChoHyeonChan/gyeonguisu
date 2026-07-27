@@ -153,6 +153,16 @@ export function cardsD3(s: MatchState): DecisionOption[] {
     effects: ['신뢰도 +8 · 교체 카드 온존'],
     apply: { trustDelta: 8, atkDelta: 0.02 },
   });
+
+  // D. 직접 고르기 — 누구를 빼고 누구를 넣을지 감독이 정한다
+  cards.push({
+    id: 'd3-manual',
+    coach: '"명단은 내가 직접 짜겠습니다."',
+    effects: ['뺄 선수와 넣을 선수를 직접 고릅니다'],
+    manual: true,
+    disabled: s.subsRemaining < 1 ? '교체 카드가 없습니다' : undefined,
+    apply: {},
+  });
   return cards;
 }
 
@@ -191,6 +201,19 @@ export function cardsD4(s: MatchState): DecisionOption[] {
     coach: '"동요를 먼저 잡아야 합니다."',
     effects: ['신뢰도 +8 · 확률 변화 없음'],
     apply: { trustDelta: 8 },
+  });
+  cards.push({
+    id: 'd4-manual',
+    coach: '"카드는 내가 직접 고르겠습니다."',
+    effects: ['뺄 선수와 넣을 선수를 직접 고릅니다'],
+    manual: true,
+    disabled:
+      s.windowsRemaining < 1
+        ? '교체 윈도우가 남아 있지 않습니다'
+        : s.subsRemaining < 1
+          ? '교체 카드가 없습니다'
+          : undefined,
+    apply: {},
   });
   return cards;
 }
