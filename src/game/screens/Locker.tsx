@@ -263,7 +263,8 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
         </div>
 
         <div className="bench-strip">
-          <span className="bench-label">벤치 · 끌어다 놓거나, 탭한 뒤 자리를 탭하세요</span>
+          {/* 명수를 적어둔다 — 가로 목록은 6명쯤에서 잘려 보여 나머지가 없는 것처럼 읽힌다 */}
+          <span className="bench-label">벤치 {bench.length}명 · 옆으로 넘기면 더 있습니다</span>
           <div className="bench-list">
             {bench.map((p) => (
               <BenchChip
