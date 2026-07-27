@@ -201,6 +201,12 @@ body::after {
 .beat-progress i { flex: 1; height: 2px; background: var(--line); transition: background 0.3s ease; }
 .beat-progress i.on { background: var(--red); }
 .tap-hint { font-size: 0.66rem; color: var(--fog); letter-spacing: 0.16em; margin-top: 10px; opacity: 0.65; }
+.sound-cue {
+  margin-top: 20px; border: 1px solid var(--line); color: var(--fog);
+  font-size: 0.74rem; padding: 8px 14px; letter-spacing: 0.02em;
+  animation: fadeUp 0.5s ease 2.2s both; transition: border-color 0.15s ease, color 0.15s ease;
+}
+.sound-cue:hover { border-color: var(--amber); color: var(--amber); }
 
 /* ══ 피치 ═════════════════════════════════════════ */
 .pitch {
@@ -253,6 +259,13 @@ body::after {
   font-family: var(--num); font-style: italic;
 }
 .fm-tabs button.on { background: var(--red); border-color: var(--red); color: #fff; }
+.fm-tabs button.custom { background: var(--amber); border-color: var(--amber); color: var(--ink); }
+
+/* 자유 배치 안내 — 놓인 높이가 곧 역할이라는 걸 잔디 위에 표시 */
+.band-guide span {
+  position: absolute; left: 6px; font-size: 0.56rem; letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.28); pointer-events: none; font-weight: 700;
+}
 .fm-tabs .ghost { margin-left: auto; font-family: var(--sans); font-style: normal; padding: 6px 11px; font-size: 0.7rem; letter-spacing: 0; }
 
 .bench-strip { margin-top: 14px; background: var(--slate); border-left: 3px solid var(--line); padding: 10px 12px; }

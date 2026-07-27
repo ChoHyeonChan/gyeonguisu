@@ -25,9 +25,23 @@ export function Briefing(props: { onDone: () => void }) {
     else audio.tick();
   }, [beat]);
 
+  const [soundOn, setSoundOn] = useState(false);
+
   const advance = () => {
     audio.unlock();
+    if (!soundOn) {
+      audio.ambient(); // 경기장 웅성거림으로 콜드 오픈에 공기를 넣는다
+      setSoundOn(true);
+    }
     if (beat < BEATS - 1) setBeat((b) => b + 1);
+  };
+
+  const turnOnSound = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    audio.unlock();
+    audio.ambient();
+    audio.tick();
+    setSoundOn(true);
   };
 
   return (
@@ -37,6 +51,11 @@ export function Briefing(props: { onDone: () => void }) {
           <div className="slate-line">2026.06.24 · MONTERREY</div>
           <div className="slate-line">ESTADIO BBVA · GROUP A</div>
           <div className="slate-big">조별리그 최종전</div>
+          {!soundOn && (
+            <button className="sound-cue" onClick={turnOnSound}>
+              🔊 소리를 켜면 경기장이 들립니다
+            </button>
+          )}
         </div>
       )}
 
@@ -105,7 +124,9 @@ export function Briefing(props: { onDone: () => void }) {
             </div>
             <div className="mcase" style={{ animationDelay: '200ms' }}>
               <i>무</i>
-              <span>사실상 진출. 다만 확정은 아닙니다.</span>
+              <span>
+                승점 4. <b>같은 시각</b> 체코가 멕시코를 잡지 않는 한 32강입니다.
+              </span>
             </div>
             <div className="mcase bad" style={{ animationDelay: '320ms' }}>
               <i>패</i>
