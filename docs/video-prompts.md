@@ -1,8 +1,34 @@
-# 영상 생성 프롬프트 (Higgsfield 웹에서 직접 생성용)
+# 영상·이미지 생성 가이드 (Higgsfield 웹에서 직접 생성)
 
-7일 무제한 기간에는 **웹에서 Unlimited mode를 켜면 모델 제한 없이 무료**다. 그중 우리에게 가장 좋은 건 **Seedance 2.0** (8초까지, start_image 참조, 장르 힌트, High 비트레이트).
+7일 무제한 기간에는 **웹에서 Unlimited mode를 켜면 무료**다. 크레딧이 나가는 작업(MCP 생성 등)은 **하지 않는다.**
 
-## 공통 설정
+## 쓸 모델 (확정)
+
+| 용도 | 모델 | 이유 |
+|---|---|---|
+| **영상** | **Seedance 2.0** | 장르 지정(drama)과 High 비트레이트가 있어 분위기·화질 손잡이가 더 많다. 길이·4K·start_image는 Kling 3.0과 동일 |
+| **이미지** | **Seedream 4.5** | 365일 무제한, 4K, 실사 품질 |
+
+Kling 3.0도 성능은 비슷하다. 무제한이므로 결과가 마음에 안 들면 같은 프롬프트로 한 번 돌려 비교해도 손해가 없다. **기본은 Seedance 2.0.**
+
+## 제작 순서
+
+**STEP 1 — 이미지로 "경기장 룩" 먼저 확정** (빠르고 무제한이라 여러 장 뽑기 좋다)
+- [ ] `A. 세로 경기장 스틸` (9:16) — 게임 배경용 기준 그림
+- [ ] `B. 가로 경기장 스틸` (16:9) — 시연영상용 기준 그림
+
+**STEP 2 — 위 이미지를 첫 프레임으로 넣고 영상 생성**
+- [ ] `1. 브리핑 배경` (9:16) ← A를 start image로
+- [ ] `2. 시연영상 오프닝` (16:9) ← B를 start image로
+- [ ] `3. 대기실 배경` (9:16, 선택) ← A를 start image로
+
+**STEP 3 — 유튜브 썸네일용 이미지**
+- [ ] `C. 썸네일 배경` (16:9) — 글자는 넣지 말고 배경만. 한글 타이틀은 내가 CSS로 얹어서 렌더한다(생성 모델은 한글을 제대로 못 쓴다)
+
+**STEP 4 — 나한테 넘기기**
+- [ ] 파일 경로만 알려주면 검수·압축·루프 처리·화면 적용은 내가 한다
+
+## 영상 공통 설정
 
 | 항목 | 값 |
 |---|---|
@@ -12,20 +38,47 @@
 | 해상도 | 720p |
 | Bitrate | High |
 | 오디오 | **끄기** (프롬프트 옆 🔊 아이콘을 Off로. 게임은 자체 합성 사운드를 쓴다) |
-| genre | `drama` 또는 `noir` |
+| genre | `drama` |
 
-비율은 용도마다 다르다. 각 프롬프트 위에 적어 뒀다.
+## 이미지 프롬프트
 
-## 두 가지 방법
+세 장 모두 아래 한 덩어리를 쓰고 **마지막 줄만** 바꾼다.
 
-**A. 텍스트만으로 (간단)** — 아래 프롬프트를 그대로 붙여넣고 여러 번 돌려 고른다.
+```
+8K photorealistic photograph, physical cinema lens, shallow depth of field, fine film grain.
+Not a 3D render, not a game engine, no CGI smoothness, not painterly, no illustration.
+A large modern football stadium at night, completely empty. No people anywhere.
+Deep blue-black night sky, cool blue shadows, warm amber floodlight pools on wet grass.
+Faint atmospheric haze in the light beams. Empty dark seating bowl fading into blackness.
+No text, no logos, no brand marks, no banners, no scoreboard numbers.
+```
 
-**B. 이미지 먼저 (정확) — 추천**
-이미지 모델도 무제한이므로, 원하는 그림을 **이미지로 먼저 확정**하고 그걸 영상의 첫 프레임으로 쓴다.
-1. 이미지 생성(Seedream 4.5 / Nano Banana 등)에 아래 **SHOT 블록의 장면 묘사**를 넣어 여러 장 뽑는다.
-2. 제일 좋은 한 장을 고른다.
-3. Seedance 2.0의 **Upload media → Image** 로 그 이미지를 넣고(start image), 아래 프롬프트를 함께 넣어 생성한다.
-→ 구도가 운에 좌우되지 않고, 여러 영상의 룩이 같아진다.
+여기에 이어서 —
+
+**A. 세로 경기장 스틸 (9:16)**
+```
+Framed from behind the deserted coaching bench. The empty bench seats fill the lower
+foreground, the floodlit pitch stretches away beyond them. Vertical composition.
+The centre of the frame is darker than the edges.
+```
+> 화면 가운데에 흰 글자가 얹히므로 **중앙이 어두운 컷**을 고를 것.
+
+**B. 가로 경기장 스틸 (16:9)**
+```
+Low wide view of the empty pitch from the halfway line, floodlights burning above,
+the stadium bowl symmetrical around the centre circle. Horizontal composition.
+```
+
+**C. 썸네일 배경 (16:9)**
+```
+The empty coaching bench seen from the side, floodlights flaring behind it,
+strong contrast, the left third of the frame kept dark and simple for a title overlay.
+```
+> 왼쪽 1/3을 비워두는 이유: 거기에 「경우의 수」 타이틀을 얹는다.
+
+## 영상 프롬프트 쓰는 법
+
+앞의 **STYLE LOCK / CONTINUITY / DIRECTION 세 블록은 글자 그대로 똑같이** 붙이고, **SHOT 한 줄만** 바꾼다. 이게 여러 영상의 룩을 하나로 묶는 방법이다. 통째로 복사해서 붙여넣으면 된다.
 
 ## 프롬프트 구조 안내
 
