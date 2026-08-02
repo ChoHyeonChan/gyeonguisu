@@ -160,7 +160,6 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
       // 클립보드도 막힌 인앱 브라우저 — 직접 고를 수 있게 화면에 띄운다
       setManualText(full);
     }
-    }
   };
 
   return (
