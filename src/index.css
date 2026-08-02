@@ -715,6 +715,47 @@ body::before {
 .verdict { background: var(--slate); border-left: 3px solid var(--amber); padding: 14px 16px; font-size: 0.89rem; }
 .verdict p + p { margin-top: 7px; }
 .ai-badge { font-size: 0.56rem; background: var(--amber); color: var(--ink); padding: 2px 6px; vertical-align: 2px; margin-left: 7px; font-weight: 900; letter-spacing: 0.1em; }
+/* ══ 3위팀 순위표 — 결과가 들어올 때마다 행이 움직인다 ══════════ */
+.third-head, .third-row {
+  display: grid; grid-template-columns: 2.2em 1fr 2.4em 2.6em;
+  align-items: center; column-gap: 8px; padding: 0 8px;
+}
+.third-head {
+  font-size: 0.6rem; color: var(--fog); letter-spacing: 0.12em;
+  font-weight: 800; margin: 12px 0 5px;
+}
+.third-head span:nth-child(3), .third-head span:nth-child(4),
+.third-row .tr-pts, .third-row .tr-gd { text-align: right; }
+.third-board { position: relative; }
+.third-row {
+  position: absolute; left: 0; right: 0; height: 30px;
+  font-size: 0.8rem; color: var(--chalk);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: transform 0.75s cubic-bezier(.35,1.15,.4,1), background 0.4s ease, color 0.4s ease;
+}
+.third-row .tr-rank, .third-row .tr-pts, .third-row .tr-gd {
+  font-family: var(--num); font-style: italic; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.third-row .tr-rank { color: var(--fog); }
+.third-row .tr-team i { font-style: normal; font-size: 0.68rem; color: var(--fog); }
+/* 진출권 안쪽은 살아 있는 색, 바깥은 가라앉는다 */
+.third-row.in .tr-rank { color: var(--chalk); }
+.third-row:not(.in) { opacity: 0.55; }
+.third-row.kor { background: var(--red-lo); color: #fff; font-weight: 900; opacity: 1; }
+.third-row.kor .tr-rank { color: #fff; }
+.third-row.hit { background: rgba(255,176,0,0.16); }
+.third-row.doom { background: var(--red); color: #fff; }
+.cut-line {
+  position: absolute; left: 0; right: 0; height: 0; z-index: 2;
+  border-top: 1px dashed var(--red); pointer-events: none;
+}
+.cut-line span {
+  position: absolute; right: 2px; top: -8px; font-size: 0.5rem;
+  color: var(--red); font-weight: 900; letter-spacing: 0.12em;
+  background: var(--ink); padding: 0 4px;
+}
+
 /* 가상 시뮬레이션 고지 — 신뢰도 게이지 바로 아래 */
 .sim-note {
   font-size: 0.6rem; color: var(--fog); opacity: 0.65;

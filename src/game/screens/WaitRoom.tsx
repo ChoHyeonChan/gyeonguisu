@@ -4,11 +4,15 @@
 
 import { useEffect, useState } from 'react';
 import type { MatchResult } from '../../engine/types';
-import { thirdTableFor, THIRD_PLACE_FINAL, FATE_MATCHES, ADVANCE_LINE, type ThirdRow } from '../../data/standings';
+import { thirdTableAt, THIRD_PLACE_FINAL, FATE_MATCHES, ADVANCE_LINE } from '../../data/standings';
 import { waitroomLine } from '../content';
 import { audio } from '../audio';
 
 const AUTO_MS = 8000;
+/** 한 행의 높이(px). 순위 이동을 translateY로 만들기 때문에 고정값이어야 한다 */
+const ROW_H = 30;
+/** DOM 순서는 팀 기준으로 고정한다. 순위는 위치로만 표현해야 이동이 보간된다 */
+const STABLE_ORDER = THIRD_PLACE_FINAL.map((r) => r.team);
 
 export function WaitRoom(props: { result: MatchResult; score: [number, number]; onDone: () => void }) {
   const { result, score } = props;
@@ -30,9 +34,11 @@ export function WaitRoom(props: { result: MatchResult; score: [number, number]; 
     return () => clearTimeout(t);
   }, [step]);
 
-  const rows: ThirdRow[] = isLoss ? thirdTableFor(score[0], score[1]) : THIRD_PLACE_FINAL;
+  // 패배 분기에서는 사용자 스코어를 한국 골득실에 반영한다
+  const korGd = isLoss ? score[0] - score[1] : undefined;
+  const stage = Math.min(step, 3) as 0 | 1 | 2 | 3;
+  const rows = thirdTableAt(stage, korGd);
   const korRank = rows.find((r) => r.isKorea)?.rank ?? 10;
-  const visible = step >= 1;
 
   return (
     <div className="screen waitroom">
@@ -76,35 +82,47 @@ export function WaitRoom(props: { result: MatchResult; score: [number, number]; 
           확인해야 만들 수 있는데 그 근거를 확보하지 못했다. 확인되지 않은 순위 변동을
           움직이는 그림으로 보여주는 것은 이 프로젝트가 지키기로 한 선을 넘는다
           (docs/sources.md — 불확실한 수치는 배제한다). */}
-      {visible && (
-        <table className="third-table">
-          <thead>
-            <tr>
-              <th>순위</th>
-              <th>팀</th>
-              <th>승점</th>
-              <th>득실</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr
-                key={r.team}
-                className={`${r.isKorea ? 'kor' : ''} ${r.rank === ADVANCE_LINE ? 'line' : ''} ${
-                  (r.team === '가나' && step === 1) || (r.team === 'DR콩고' && step === 2) ? 'hit' : ''
-                } ${r.isKorea && step >= maxStep ? 'doom' : ''}`}
-              >
-                <td>{r.rank}</td>
-                <td>
-                  {r.team} <span className="dim">({r.group})</span>
-                </td>
-                <td>{r.pts}</td>
-                <td>{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {/* 결과가 들어올 때마다 순위표가 재배열된다 (기획서 §2-③의 서명 장면).
+          행을 순서대로 다시 그리면 순간이동으로 보이므로, DOM 순서는 팀 기준으로
+          고정하고 순위에 따라 세로 위치만 옮긴다. 그래야 CSS가 이동을 보간한다. */}
+      <div className="third-head">
+        <span>순위</span>
+        <span>팀</span>
+        <span>승점</span>
+        <span>득실</span>
+      </div>
+      <div className="third-board" style={{ height: `${rows.length * ROW_H}px` }}>
+        <div className="cut-line" style={{ top: `${ADVANCE_LINE * ROW_H}px` }}>
+          <span>진출선</span>
+        </div>
+        {STABLE_ORDER.map((team) => {
+          const r = rows.find((x) => x.team === team)!;
+          const moving = FATE_MATCHES[step - 1]?.label.includes(team);
+          return (
+            <div
+              key={team}
+              className={`third-row ${r.isKorea ? 'kor' : ''} ${moving ? 'hit' : ''} ${
+                r.isKorea && step >= maxStep ? 'doom' : ''
+              } ${r.rank <= ADVANCE_LINE ? 'in' : ''}`}
+              style={{ transform: `translateY(${(r.rank - 1) * ROW_H}px)` }}
+            >
+              <span className="tr-rank">{r.rank}</span>
+              <span className="tr-team">
+                {r.team} <i>({r.group})</i>
+              </span>
+              <span className="tr-pts">{r.pts}</span>
+              <span className="tr-gd">{r.gd > 0 ? `+${r.gd}` : r.gd}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="micro dim">
+        {step === 0
+          ? `이 시각 한국은 ${korRank}위. 진출선은 8위입니다.`
+          : step >= maxStep
+            ? '세 경기가 모두 끝났습니다. 순위표가 확정됐습니다.'
+            : '결과가 들어올 때마다 순위가 다시 매겨집니다.'}
+      </p>
 
       {step >= maxStep && (
         <div className="wr-final">

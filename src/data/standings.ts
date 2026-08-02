@@ -28,11 +28,41 @@ export const THIRD_PLACE_FINAL: ThirdRow[] = [
 
 export const ADVANCE_LINE = 8;
 
-/* 경기 전 3위팀 순위표는 만들지 않는다.
- * 그날 밤 어느 조 3위팀이 아직 3차전을 남겨두고 있었는지 확인하지 못했다.
- * 그것 없이 '경기 전 순위'를 계산하면 가나와 DR콩고만 되돌린 가정표가 되고,
- * 순위 변동을 연출로 보여주는 순간 확인되지 않은 사실을 주장하게 된다.
- * 이 프로젝트는 확정값만 표시한다(기획서 §5-5, docs/sources.md). */
+/** 6/27 밤 세 경기가 끝나기 전의 3위팀 순위표 — 그때 한국은 8위, 진출권 안이었다.
+ *
+ *  근거: 코리아타임스 2026-06-28 "Korea clung to the eighth and final spot among
+ *  third-place teams" / "It pushed Korea out of the top eight, as DR Congo jumped
+ *  to No. 1 with four points".
+ *
+ *  세 경기가 순위표를 바꿨다. 최종 확정값에서 각 경기의 효과만 되돌려 역산한다.
+ *   - 크로아티아 2-1 가나        → 가나 패배. 승점 그대로 4, 골득실만 +1에서 0으로
+ *   - 오스트리아 3-3 알제리      → 알제리 무승부. 승점 3에서 4로, 골득실 -2 불변
+ *   - DR콩고 3-1 우즈베키스탄    → DR콩고 승리. 승점 1에서 4로, 골득실 -1에서 +1로
+ *
+ *  산술 검증: 세 경기 전이면 한국(3점 -1) 위에 4점 5팀(가나·스웨덴·에콰도르·
+ *  보스니아·파라과이)과 3점 상위 2팀(세네갈 +2, 이란 0)뿐이라 정확히 8위가 된다.
+ *  기사의 서술과 일치한다.
+ *
+ *  stage 0 = 세 경기 전 / 1 = 가나전 후 / 2 = 알제리전 후 / 3 = DR콩고전 후(확정)
+ *  korGd를 주면 한국 골득실을 사용자 스코어로 대체한다(패배 분기).
+ */
+export function thirdTableAt(stage: 0 | 1 | 2 | 3, korGd?: number): ThirdRow[] {
+  const rows = THIRD_PLACE_FINAL.map((r) => ({ ...r }));
+  const set = (team: string, pts: number, gd: number) => {
+    const r = rows.find((x) => x.team === team);
+    if (r) Object.assign(r, { pts, gd });
+  };
+  if (stage < 3) set('DR콩고', 1, -1);
+  if (stage < 2) set('알제리', 3, -2);
+  if (stage < 1) set('가나', 4, 1);
+  if (korGd !== undefined) {
+    const k = rows.find((r) => r.isKorea);
+    if (k) k.gd = korGd;
+  }
+  rows.sort((a, b) => b.pts - a.pts || b.gd - a.gd);
+  rows.forEach((r, i) => (r.rank = i + 1));
+  return rows;
+}
 
 /** 사용자 스코어를 반영한 3위팀 순위표 — 패배 시 P4 대기실용.
  *  한국 행의 gd만 동적(경기 전 GD 0 + 남아공전 스코어), 나머지 11팀은 확정 실데이터.
@@ -45,10 +75,12 @@ export function thirdTableFor(korGf: number, korGa: number): ThirdRow[] {
   return rows;
 }
 
-/** 6/27 밤(현지)의 두 경기 — 한국의 운명을 결정한 경기들 */
+/** 6/27 밤(현지)의 세 경기 — 한국의 운명을 결정한 경기들.
+ *  한국은 이 경기들 전까지 8위, 진출권 안에 있었다. */
 export const FATE_MATCHES = [
-  { label: '크로아티아 2-1 가나', group: 'L', detail: '가나가 승점 4로 3위를 지킵니다. 한국 위에 남습니다.' },
-  { label: 'DR콩고 3-1 우즈베키스탄', group: 'K', detail: 'DR콩고가 승점 4로 뛰어오릅니다. 한국 위로 올라섭니다.' },
+  { label: '크로아티아 2-1 가나', group: 'L', detail: '가나가 승점 4를 지킵니다. 한국 위에 그대로 남습니다.' },
+  { label: '오스트리아 3-3 알제리', group: 'J', detail: '알제리가 승점 1을 보태 4점이 됩니다. 한국을 넘어섭니다.' },
+  { label: 'DR콩고 3-1 우즈베키스탄', group: 'K', detail: 'DR콩고가 최하위에서 1위로 올라섭니다. 한국은 다시 한 칸 밀립니다.' },
 ] as const;
 
 /** 경기 전(6/24 킥오프 시점) A조 승점 — 확정 스코어 산술 */
