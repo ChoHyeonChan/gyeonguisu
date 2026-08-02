@@ -33,9 +33,11 @@ export default async function handler(req: { method?: string; body?: unknown }, 
   const WHEN: Record<string, string> = {
     D1: '킥오프 전', D2: '전반 30분', D3: '하프타임', D4: '후반 65분', D5: '후반 80분',
   };
-  const path = (b.decisions ?? [])
-    .map((d) => `${WHEN[d.id] ?? d.id}에 "${d.label}"`)
-    .join(', ');
+  // 라벨을 문장에 그대로 옮겨 붙일 수 있는 형태로 다듬는다.
+  // 가운뎃점 뒤(부연)와 괄호(형태 표기)를 떼면 '핀포인트 1장', '총공세'처럼 남는다.
+  const core = (s: string) => s.split(/[·(]/)[0].trim();
+  const picks = (b.decisions ?? []).map((d) => ({ when: WHEN[d.id] ?? d.id, core: core(d.label), full: d.label }));
+  const path = picks.map((p) => `- ${p.when}: ${p.full}`).join('\n');
 
   const system = [
     '너는 축구 경기 결산을 쓰는 작가다. 한국어로 2~3문장, 절제된 중계 문체로 쓴다.',
@@ -51,9 +53,19 @@ export default async function handler(req: { method?: string; body?: unknown }, 
     // 실측: 입력에 없던 감독 발언("선제골을 노려야 한다")을 통째로 지어냈다.
     '감독이나 선수의 대사·발언을 지어내지 않는다. 따옴표를 쓰지 않는다.',
     '주어진 결정 라벨과 스코어, 신뢰도 값 밖의 사실을 만들어내지 않는다.',
+    // 실측: 자세 변경(템포 상승)을 "선수 교체"로, 공격 카드(핀포인트 1장)를 "수비 강화"로
+    // 바꿔 썼다. 라벨을 해석하는 순간 없던 사실이 생긴다. 그대로 옮겨 적게 한다.
+    '결정을 언급할 때는 주어진 표현을 글자 그대로 옮겨 적는다. 다른 말로 바꾸어 설명하지 않는다.',
+    '특히 전술 지시를 교체라고 쓰거나, 공격 카드를 수비 강화라고 쓰는 식의 치환을 하지 않는다.',
+    '결정 두 개 이상을 시각과 함께 그대로 인용해 서술한다.',
     '긴 대시(—) 사용 금지. 과장 금지. 감탄사 금지.',
   ].join('\n');
-  const user = `경기 결과: 한국 ${b.score?.[0] ?? 0} : ${b.score?.[1] ?? 0} 남아공 (${b.result}). 종료 시점 선수단 신뢰도 ${b.trust}. 감독의 결정: ${path}`;
+  const user = [
+    `경기 결과: 한국 ${b.score?.[0] ?? 0} : ${b.score?.[1] ?? 0} 남아공 (${b.result}).`,
+    `종료 시점 선수단 신뢰도 ${b.trust}.`,
+    '감독의 결정 (표현을 그대로 사용할 것):',
+    path,
+  ].join('\n');
 
   try {
     const ac = new AbortController();
@@ -65,7 +77,8 @@ export default async function handler(req: { method?: string; body?: unknown }, 
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
         max_tokens: 220,
-        temperature: 0.8,
+        // 그대로 인용하라는 제약이 있으므로 온도를 낮춘다. 높으면 제 말로 바꿔 쓰다 폐기된다
+        temperature: 0.6,
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },
@@ -85,6 +98,10 @@ export default async function handler(req: { method?: string; body?: unknown }, 
     if (/필요가 있습니다|고민해|되새기|교훈|반성/.test(text)) return res.status(422).json({ error: 'preachy' });
     // 따옴표가 있으면 없는 대사를 지어낸 것이다. 이 게임은 사실만 서술한다 → 규칙 기반 폴백
     if (/["'“”'']/.test(text)) return res.status(422).json({ error: 'invented-quote' });
+    // 결정을 그대로 인용했는지 확인한다. 인용이 없으면 라벨을 제 나름대로 해석한 문장이고,
+    // 그 순간 없던 사실이 섞인다(실측: 자세 변경 → "선수 교체"). 확인 못 하면 폐기가 안전하다.
+    const quoted = picks.filter((p) => p.core.length >= 2 && text.includes(p.core)).length;
+    if (quoted < Math.min(2, picks.length)) return res.status(422).json({ error: 'paraphrased' });
     text = text.replace(/—/g, ',');
     res.setHeader('cache-control', 'no-store');
     return res.status(200).json({ text });
