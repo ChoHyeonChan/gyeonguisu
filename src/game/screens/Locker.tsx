@@ -83,6 +83,40 @@ function shapeOf(lineup: Lineup): string {
   return rows.length > 4 ? bandShape(lineup) : rows.join('-');
 }
 
+/** 놓인 자리로 포지션 약어를 만든다. 축구 중계·전술 보드의 공용 표기다.
+ *  데이터로 저장하지 않고 좌표에서 그때그때 읽는다 — 자유 배치가 곧 포지션이기 때문이다. */
+function roleOf(band: Slot['band'], x: number): string {
+  if (band === 'GK') return 'GK';
+  const left = x < 34;
+  const right = x > 66;
+  if (band === 'DF') return left ? 'LB' : right ? 'RB' : 'CB';
+  if (band === 'MF') return left ? 'LM' : right ? 'RM' : 'CM';
+  return left ? 'LW' : right ? 'RW' : 'ST';
+}
+
+/** 같은 줄에 선 선수들을 잇는 선. 전술 보드처럼 대형이 눈에 들어온다 */
+function rowLinks(lineup: Lineup): { x1: number; y1: number; x2: number; y2: number }[] {
+  const pts = lineup.placements
+    .map((p) => lineup.slots.find((s) => s.id === p.slotId)!)
+    .filter((s) => s.band !== 'GK')
+    .sort((a, b) => b.y - a.y);
+  const out: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  let row: Slot[] = [];
+  const flush = () => {
+    const sorted = [...row].sort((a, b) => a.x - b.x);
+    for (let i = 1; i < sorted.length; i++) {
+      out.push({ x1: sorted[i - 1].x, y1: sorted[i - 1].y, x2: sorted[i].x, y2: sorted[i].y });
+    }
+    row = [];
+  };
+  for (const s of pts) {
+    if (row.length && row[row.length - 1].y - s.y >= ROW_GAP) flush();
+    row.push(s);
+  }
+  flush();
+  return out;
+}
+
 /** 폭을 사람 말로. 좌우 배치가 실제로 계산에 들어간다는 것을 화면에서 보여준다 */
 function widthLabel(bias: number): { text: string; tone: string } | null {
   if (bias >= 0.55) return { text: '측면 최대', tone: 'wide' };
@@ -114,6 +148,7 @@ function SlotChip(props: { slot: Slot; playerNo: number; selected: boolean; onTa
       style={{ left: `${slot.x}%`, top: `${slot.y}%`, transform: tf }}
       onClick={props.onTap}
     >
+      <span className="role">{roleOf(slot.band, slot.x)}</span>
       <span className="no">{p.no}</span>
       <span className="nm">{p.name}</span>
     </button>
@@ -328,6 +363,13 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
           {/* 역할 경계를 눈에 보이게 — 이 선을 넘겨야 공격/미드필드가 바뀐다 */}
           <div className="band-line" style={{ top: '36%' }} data-label="공격 / 미드필드" />
           <div className="band-line" style={{ top: '62%' }} data-label="미드필드 / 수비" />
+
+          {/* 같은 줄끼리 이어 대형을 보이게 한다 */}
+          <svg className="shape-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            {rowLinks(lineup).map((l, i) => (
+              <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} />
+            ))}
+          </svg>
           {lineup.placements.map((pl) => (
             <SlotChip
               key={pl.slotId}

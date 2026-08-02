@@ -344,6 +344,25 @@ body::before {
 .fm-tabs button.on { background: var(--red); border-color: var(--red); color: #fff; }
 .fm-tabs button.custom { background: var(--amber); border-color: var(--amber); color: var(--ink); }
 
+/* 같은 줄을 잇는 대형선 — 전술 보드 문법. 칩보다 아래에 깔린다 */
+.shape-links {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 1;
+}
+.shape-links line {
+  stroke: rgba(255, 255, 255, 0.26);
+  stroke-width: 0.5;
+  stroke-dasharray: 2 1.6;
+}
+
+/* 포지션 약어 — 놓인 자리에서 읽어낸 값 */
+.chip .role {
+  display: block; font-size: 0.5rem; font-weight: 900; letter-spacing: 0.1em;
+  color: var(--amber); margin-bottom: 2px; line-height: 1;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
+.chip.misfit .role { color: #ff8a8a; }
+
 /* 자유 배치 안내 — 놓인 높이가 곧 역할이라는 걸 잔디 위에 표시 */
 .band-guide span {
   position: absolute; left: 6px; font-size: 0.56rem; letter-spacing: 0.2em;
