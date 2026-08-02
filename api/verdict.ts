@@ -37,7 +37,8 @@ export default async function handler(req: { method?: string; body?: unknown }, 
   // 가운뎃점 뒤(부연)와 괄호(형태 표기)를 떼면 '핀포인트 1장', '총공세'처럼 남는다.
   const core = (s: string) => s.split(/[·(]/)[0].trim();
   const picks = (b.decisions ?? []).map((d) => ({ when: WHEN[d.id] ?? d.id, core: core(d.label), full: d.label }));
-  const path = picks.map((p) => `- ${p.when}: ${p.full}`).join('\n');
+  // 모델에는 다듬은 표현만 준다. 가운뎃점이 붙은 원본을 주면 문장에 그대로 박혀 읽기 나쁘다
+  const path = picks.map((p) => `- ${p.when}: ${p.core}`).join('\n');
 
   const system = [
     '너는 축구 경기 결산을 쓰는 작가다. 한국어로 2~3문장, 절제된 중계 문체로 쓴다.',
@@ -57,7 +58,11 @@ export default async function handler(req: { method?: string; body?: unknown }, 
     // 바꿔 썼다. 라벨을 해석하는 순간 없던 사실이 생긴다. 그대로 옮겨 적게 한다.
     '결정을 언급할 때는 주어진 표현을 글자 그대로 옮겨 적는다. 다른 말로 바꾸어 설명하지 않는다.',
     '특히 전술 지시를 교체라고 쓰거나, 공격 카드를 수비 강화라고 쓰는 식의 치환을 하지 않는다.',
-    '결정 두 개 이상을 시각과 함께 그대로 인용해 서술한다.',
+    '결정 두 개를 시각과 함께 그대로 인용해 서술한다. 다섯 개를 전부 나열하지 않는다.',
+    // 전부 나열하면 서술이 아니라 기록지가 된다. 기획서 §4 P5가 요구한 건 성향 한 줄이다.
+    '전체 3문장을 넘기지 않는다. 앞 두 문장은 결정의 사실, 마지막 한 문장은 그 결정들이 그리는 성향을 한 줄로 적는다.',
+    '성향 한 줄의 예시 형태: 당신은 기다리지 않는 쪽입니다 / 당신은 흔들리지 않는 쪽입니다.',
+    '결정이 결과를 만들었다고 쓰지 않는다. 안정성을 가져왔습니다 같은 인과 문장은 금지한다.',
     '긴 대시(—) 사용 금지. 과장 금지. 감탄사 금지.',
   ].join('\n');
   const user = [
@@ -96,6 +101,8 @@ export default async function handler(req: { method?: string; body?: unknown }, 
     // 내부 식별자 노출·훈계조는 폐기 → 규칙 기반 서술로 폴백
     if (/\bD[1-5]\b/.test(text)) return res.status(422).json({ error: 'jargon' });
     if (/필요가 있습니다|고민해|되새기|교훈|반성/.test(text)) return res.status(422).json({ error: 'preachy' });
+    // 다섯 결정을 전부 받아적으면 서술이 아니라 기록지다. 그건 이미 타임라인이 하고 있다
+    if ((text.match(/[.!?]/g) ?? []).length > 4) return res.status(422).json({ error: 'too-long' });
     // 따옴표는 결정 표현을 옮겨 적을 때만 허용한다. 그 밖의 인용은 지어낸 대사다
     // (실측: 입력에 없던 감독 발언을 통째로 창작했다).
     const known = picks.flatMap((p) => [p.core, p.full]);
