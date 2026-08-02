@@ -17,6 +17,9 @@ function orderEffects(s: MatchState, posture: Posture, extraFlags?: string[]): s
   const pExec = s.trust < B.TRUST_ORDER_THRESHOLD ? B.TRUST_ORDER_SUCCESS : 1;
   const kor = pExec * withP.kor + (1 - pExec) * base.kor - base.kor;
   const opp = pExec * withP.opp + (1 - pExec) * base.opp - base.opp;
+  // 이미 그 자세면 수치가 전부 0이 된다. 이유를 적지 않으면 고장난 카드로 읽힌다.
+  // 추가 플래그가 붙는 카드(총공세의 stoppagePush 등)는 자세가 같아도 효과가 남으므로 제외한다
+  if (posture === s.posture && !extraFlags?.length) return ['이미 이 자세입니다 · 변화 없음'];
   const rows = [`득점 기대 ${pp(kor)}`, `실점 위험 ${pp(opp)}`];
   if (pExec < 1) rows.push(`이 지시가 전달될 확률 ${Math.round(pExec * 100)}%`);
   return rows;

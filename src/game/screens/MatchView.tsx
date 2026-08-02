@@ -2,7 +2,7 @@
 // 공이 실제로 움직이고 라인이 밀고 당긴다. 결정의 순간에는 시간이 멈추고 관중 소음이 끊긴다.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { MatchState, DecisionId, DecisionOption } from '../../engine/types';
+import type { MatchState, DecisionId, DecisionOption, MatchEventKey } from '../../engine/types';
 import type { Rng } from '../../engine/rng';
 import { runTick, TICK_STARTS, clampTrust, applySubs, subbedOff } from '../../engine/engine';
 import { cardsFor } from '../../engine/flow';
@@ -25,6 +25,9 @@ interface FeedItem {
 }
 
 const PAUSE_ID: Record<number, Exclude<DecisionId, 'D1'>> = { 30: 'D2', 45: 'D3', 65: 'D4', 80: 'D5' };
+
+/** 우리 골문 앞이 열리는 장면들. 득점은 여기 없다 — 위기는 아직 결과가 아니다 */
+const DANGER = new Set<MatchEventKey>(['OPP_BIG_CHANCE', 'ANCHOR_DOUBLESAVE', 'ANCHOR_SUBCROSS']);
 
 function secondsFor(id: DecisionId, firstPlay: boolean): number {
   if (id === 'D3') return 45;
@@ -60,9 +63,13 @@ export function MatchView(props: {
   const [coachmark, setCoachmark] = useState(firstPlay);
   const [flash, setFlash] = useState<null | 'k' | 'o'>(null);
   const [shake, setShake] = useState(false);
+  const [tense, setTense] = useState(false);
   const [sound, setSound] = useState(audio.enabled);
   const [seq, setSeq] = useState<Waypoint[] | null>(null);
-  const [picker, setPicker] = useState<{ id: Exclude<DecisionId, 'D1'>; off: number | null } | null>(null);
+  // trust — 시트를 열기 전(교체를 반영하기 전)의 신뢰도. 결산 타임라인이 이 값을 쓴다
+  const [picker, setPicker] = useState<
+    { id: Exclude<DecisionId, 'D1'>; off: number | null; trust: number; subsBefore: number } | null
+  >(null);
 
   const push = useCallback((item: Omit<FeedItem, 'id'>) => {
     setFeed((f) => [{ ...item, id: feedId.current++ }, ...f].slice(0, 40));
@@ -129,6 +136,14 @@ export function MatchView(props: {
       setSeq(seqFor(lead.key));
     }
 
+    // 우리 골문 앞의 위기 — 채도와 소리가 미세하게 조여든다 (기획서 §4 P3).
+    // 득점 연출(플래시·셰이크)과 겹치지 않도록 실점 틱에서는 걸지 않는다.
+    if (!events.some((e) => e.key === 'KOR_GOAL' || e.key === 'OPP_GOAL') && events.some((e) => DANGER.has(e.key))) {
+      setTense(true);
+      audio.tension();
+      setTimeout(() => setTense(false), 2600);
+    }
+
     for (const e of events) {
       const text = lineFor(e, st.score);
       if (!text) continue;
@@ -182,10 +197,12 @@ export function MatchView(props: {
     const opt = optId ? d.cards.find((c) => c.id === optId) : undefined;
     const minute = TICK_STARTS[tickIdx.current];
     const alts = d.cards.filter((c) => !c.disabled && c.id !== optId).map((c) => c.coach.replace(/"/g, ''));
+    // 결산이 "그때 화면"을 복원할 수 있게, 적용하기 전의 신뢰도를 잡아 둔다 (기획서 §4 P5)
+    const seenTrust = st.trust;
 
     // 직접 고르기 — 선택 시트를 연다. 결정은 시트를 닫을 때 확정된다
     if (opt?.manual) {
-      setPicker({ id: d.id, off: null });
+      setPicker({ id: d.id, off: null, trust: seenTrust, subsBefore: st.usedSubs.length });
       return;
     }
 
@@ -194,11 +211,11 @@ export function MatchView(props: {
       const before = st.usedSubs.length;
       applyOption(st, opt, rng, { atHT: d.id === 'D3' });
       showBoard(st.usedSubs.slice(before).map((u) => ({ off: u.off, on: u.on })));
-      st.decisions.push({ id: d.id, optionId: opt.id, minute, alts });
+      st.decisions.push({ id: d.id, optionId: opt.id, minute, alts, trust: seenTrust, shown: opt.effects });
       push({ minute: `${minute}'`, text: `벤치의 결정 · ${opt.coach.replace(/"/g, '')}`, kind: 'sys' });
     } else {
       if (d.id === 'D3') st.trust = clampTrust(st.trust + B.TRUST_D3_SILENCE);
-      st.decisions.push({ id: d.id, optionId: 'no-intervention', minute, alts });
+      st.decisions.push({ id: d.id, optionId: 'no-intervention', minute, alts, trust: seenTrust });
       push({ minute: `${minute}'`, text: '벤치는 움직이지 않았다.', kind: 'sys' });
     }
     if (d.id === 'D3') {
@@ -226,7 +243,7 @@ export function MatchView(props: {
       /* 자원 부족 등 — 조용히 무시하고 시트를 닫는다 */
     }
     syncHud();
-    setPicker({ id: picker!.id, off: null });
+    setPicker({ id: picker!.id, off: null, trust: picker!.trust, subsBefore: picker!.subsBefore });
   };
 
   const closePicker = () => {
@@ -234,7 +251,16 @@ export function MatchView(props: {
     const d = decision!;
     const minute = TICK_STARTS[tickIdx.current];
     const alts = d.cards.filter((c) => !c.disabled && c.id !== `${d.id.toLowerCase()}-manual`).map((c) => c.coach.replace(/"/g, ''));
-    st.decisions.push({ id: d.id, optionId: `${d.id.toLowerCase()}-manual`, minute, alts });
+    // 직접 고르기에는 카드 수치가 없다. 실제로 몇 장을 썼는지가 그 순간의 기록이다
+    const made = st.usedSubs.length - picker!.subsBefore;
+    st.decisions.push({
+      id: d.id,
+      optionId: `${d.id.toLowerCase()}-manual`,
+      minute,
+      alts,
+      trust: picker!.trust,
+      shown: made ? [`교체 ${made}장 투입`] : ['교체 없이 시트를 닫음'],
+    });
     if (d.id === 'D3') {
       const [k, o] = st.score;
       const key = k > o ? 'ht_leading' : k < o ? 'ht_trailing' : 'ht_level';
@@ -292,7 +318,7 @@ export function MatchView(props: {
   );
 
   return (
-    <div className={`screen match ${paused ? 'paused' : ''} ${shake ? 'shake' : ''}`}>
+    <div className={`screen match ${paused ? 'paused' : ''} ${shake ? 'shake' : ''} ${tense ? 'tense' : ''}`}>
       {flash && <div className={`goalflash ${flash === 'k' ? 'fk' : 'fo'}`} />}
       <Scoreboard minute={clock} score={hud.score} />
       <TrustBar trust={hud.trust} />

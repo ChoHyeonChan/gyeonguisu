@@ -208,6 +208,9 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
       </p>
 
       <h3>당신의 다섯 결정</h3>
+      {/* 각 줄은 그 순간의 화면을 그대로 복원한다 — 고른 카드, 그 카드에 적혀 있던 수치,
+          그때 게이지에 떠 있던 신뢰도, 그리고 가지 않은 갈림길 (기획서 §4 P5).
+          "알고도 걸었다"가 이 게임의 테제라면, 결산은 무엇을 알고 있었는지를 보여줘야 한다. */}
       <div className="timeline">
         {s.decisions.map((d) => (
           <div key={d.id} className={`tl-item ${d.optionId === 'no-intervention' ? 'silent' : ''}`}>
@@ -215,12 +218,26 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
             <span className="tl-min">{d.id === 'D1' ? '킥오프 전' : d.id === 'D3' ? 'HT' : `${d.minute}'`}</span>
             <span className="tl-body">
               <span className="tl-label">{OPT_LABEL[d.optionId] ?? d.optionId}</span>
+              {(d.shown?.length || d.trust !== undefined) && (
+                <span className="tl-nums">
+                  {d.shown?.map((v, i) => (
+                    <em key={i} className={v.includes('전달될 확률') ? 'warn' : ''}>
+                      {v}
+                    </em>
+                  ))}
+                  {d.trust !== undefined && (
+                    <em className={`trustchip ${d.trust < 40 ? 'low' : ''}`}>신뢰 {d.trust}</em>
+                  )}
+                </span>
+              )}
               {d.alts?.length ? <span className="tl-alt">{d.alts.join(' / ')}</span> : null}
             </span>
           </div>
         ))}
       </div>
-      <p className="micro dim">흐릿한 줄은 가보지 않은 갈림길입니다.</p>
+      <p className="micro dim">
+        수치는 그 순간 카드에 적혀 있던 값 그대로입니다. 흐릿한 줄은 가보지 않은 갈림길입니다.
+      </p>
 
       <h3>그날의 벤치 vs 나</h3>
       <div className="versus">

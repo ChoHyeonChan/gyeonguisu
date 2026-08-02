@@ -420,6 +420,14 @@ body::before {
 .match { gap: 9px; transition: filter 0.45s ease; }
 .match.paused > :not(.decision-back):not(.goalflash) { filter: saturate(0.18) brightness(0.62); }
 
+/* 위기 — 화면이 미세하게 조여든다. 정지(paused)의 3분의 1 세기로, 알아채기 전에 먼저 느껴지게.
+   paused가 켜져 있으면 그쪽이 이겨야 하므로 :not(.paused)로 잠근다 (기획서 §4 P3) */
+.match.tense:not(.paused) { filter: saturate(0.72) contrast(1.05); }
+.match.tense:not(.paused) .pitch-wrap { box-shadow: inset 0 0 46px 6px rgba(214, 0, 43, 0.16); }
+@media (prefers-reduced-motion: reduce) {
+  .match.tense:not(.paused) { filter: none; }
+}
+
 .scorebug { display: flex; align-items: stretch; background: var(--slate); border-left: 4px solid var(--red); }
 .sb-side { flex: 1; padding: 9px 12px; display: flex; flex-direction: column; justify-content: center; }
 .sb-side.away { align-items: flex-end; }
@@ -701,6 +709,15 @@ body::before {
 .tl-id { font-family: var(--num); font-style: italic; font-weight: 900; color: var(--red); flex: 0 0 26px; }
 .tl-min { color: var(--fog); flex: 0 0 56px; font-size: 0.72rem; letter-spacing: 0.06em; }
 .tl-body { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+/* 그 순간 카드에 적혀 있던 수치 + 게이지 값 — 결정의 근거를 복원한다 */
+.tl-nums { display: flex; flex-wrap: wrap; gap: 3px 9px; margin-top: 3px; }
+.tl-nums em {
+  font-style: normal; font-family: var(--num); font-weight: 700;
+  font-size: 0.7rem; letter-spacing: 0.02em; color: var(--fog);
+}
+.tl-nums em.warn { color: var(--red); font-weight: 900; }
+.tl-nums em.trustchip { color: var(--chalk); border-bottom: 1px solid var(--line); }
+.tl-nums em.trustchip.low { color: var(--red); border-bottom-color: var(--red); }
 .tl-alt {
   color: var(--fog); opacity: 0.34; filter: blur(0.5px);
   font-size: 0.68rem; line-height: 1.4; margin-top: 1px;

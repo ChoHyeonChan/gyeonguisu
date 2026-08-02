@@ -177,6 +177,27 @@ class AudioEngine {
     setTimeout(() => this.ramp(0.18, 3), 2500);
   }
 
+  /** 위기 — 관중이 숨을 들이켠다. 함성이 살짝 죄어들었다가 풀린다 (기획서 §4 P3).
+   *  득점 연출과 구분되도록 임팩트를 만들지 않는다. 조여드는 것은 소리의 '폭'이지 크기가 아니다 */
+  tension() {
+    if (!this.ctx || !this.master) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(58, t);
+    o.frequency.linearRampToValueAtTime(84, t + 1.5);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.075, t + 0.5);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 1.9);
+    // 군중은 조용해졌다가 되돌아온다 — 숨을 참는 스탠드
+    this.ramp(0.09, 0.4);
+    setTimeout(() => this.ramp(0.18, 1.4), 1500);
+  }
+
   /** 종료 휘슬: 삑-삑-삐이익 */
   whistle() {
     if (!this.ctx || !this.master) return;

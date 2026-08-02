@@ -85,7 +85,18 @@ export interface MatchState {
   onPitch: number[];       // 현재 그라운드 11인
   usedSubs: { minute: number; off: number; on: number }[];
   events: MatchEvent[];
-  decisions: { id: DecisionId; optionId: string; minute: number; alts?: string[] }[];
+  // trust·shown은 결산 타임라인이 "그때 감독이 보고 있던 화면"을 복원하기 위한 스냅샷이다
+  // (기획서 §4 P5 — 각 순간의 수치·신뢰도). 판정에는 쓰지 않는다.
+  decisions: {
+    id: DecisionId;
+    optionId: string;
+    minute: number;
+    alts?: string[];
+    /** 결정을 내리던 순간 게이지에 떠 있던 신뢰도 */
+    trust?: number;
+    /** 고른 카드에 적혀 있던 수치 문자열 — 사용자가 본 숫자 그대로 */
+    shown?: string[];
+  }[];
   flags: Set<string>;
   finished: boolean;
 }

@@ -34,7 +34,14 @@ const PAUSES: [number, Exclude<DecisionId, 'D1'>][] = [
 export function setupMatch(seed: number, d1: D1Setup): MatchState {
   const s = createMatch(seed, d1.lineup);
   s.trust = clampTrust(s.trust + (d1.sonStarts ? B.TRUST_D1_DELTA : -B.TRUST_D1_DELTA));
-  s.decisions.push({ id: 'D1', optionId: d1.sonStarts ? 'd1-start' : 'd1-bench', minute: 0 });
+  // D1은 게이지가 뜨기 전이라 '결정 직후의 신뢰도'가 사용자가 처음 보게 될 값이다
+  s.decisions.push({
+    id: 'D1',
+    optionId: d1.sonStarts ? 'd1-start' : 'd1-bench',
+    minute: 0,
+    trust: s.trust,
+    shown: [`선수단 신뢰 ${d1.sonStarts ? '+' : '−'}${B.TRUST_D1_DELTA}`],
+  });
   return s;
 }
 
@@ -49,13 +56,14 @@ export function playMatch(seed: number, d1: D1Setup, policy: Policy): MatchState
       const cards = cardsFor(id, s);
       const pick = policy(id, cards, s);
       const opt = pick ? cards.find((c) => c.id === pick) : undefined;
+      const seenTrust = s.trust; // 결정을 내리는 시점의 값 — 적용 전에 잡는다
       if (opt && !opt.disabled) {
         applyOption(s, opt, rng, { atHT: id === 'D3' });
-        s.decisions.push({ id, optionId: opt.id, minute: t });
+        s.decisions.push({ id, optionId: opt.id, minute: t, trust: seenTrust, shown: opt.effects });
       } else {
         // 무효 선택(없는 카드·비활성 카드)도 '개입하지 않음'과 동일 경로 — 결정이 증발하지 않는다 (검수 반영)
         if (id === 'D3') s.trust = clampTrust(s.trust + B.TRUST_D3_SILENCE); // 라커룸 침묵의 대가
-        s.decisions.push({ id, optionId: 'no-intervention', minute: t });
+        s.decisions.push({ id, optionId: 'no-intervention', minute: t, trust: seenTrust });
       }
     }
     runTick(s, t, rng);
