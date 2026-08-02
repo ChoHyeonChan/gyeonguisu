@@ -273,6 +273,13 @@ export function MatchView(props: {
 
   const paused = decision != null;
   const st = stateRef.current!;
+
+  // 아직 치르지 않은 결정 중 가장 이른 시각
+  const nextDecisionAt =
+    Object.keys(PAUSE_ID)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .find((m) => !st.decisions.some((d) => d.id === PAUSE_ID[m])) ?? null;
   // 교체로 나간 선수는 다시 들어올 수 없으므로 후보 목록에서도 뺀다 (경기 규칙).
   // 골키퍼는 골키퍼 자리에만 넣는다 — 필드 플레이어 자리에 GK를 세우면 화면이 이상해진다.
   const goneOff = subbedOff(st);
@@ -291,6 +298,13 @@ export function MatchView(props: {
       <TrustBar trust={hud.trust} />
       <div className="subinfo dim">
         교체 {hud.subs}장 · 윈도우 {st.windowsRemaining}회
+        {/* 킥오프부터 첫 결정까지 30분은 지켜보기만 한다. 언제 차례가 오는지
+            보이지 않으면 '아무 일도 안 일어나는 시간'이 된다. */}
+        {nextDecisionAt != null && !paused && (
+          <span className="nextcue">
+            다음 결정 <b>{nextDecisionAt}&apos;</b>
+          </span>
+        )}
         <button className="soundbtn" title="소리 켜기/끄기" onClick={() => setSound(audio.toggle())}>
           {sound ? '🔊' : '🔇'}
         </button>
