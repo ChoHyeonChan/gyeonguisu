@@ -96,13 +96,21 @@ export default async function handler(req: { method?: string; body?: unknown }, 
     // 내부 식별자 노출·훈계조는 폐기 → 규칙 기반 서술로 폴백
     if (/\bD[1-5]\b/.test(text)) return res.status(422).json({ error: 'jargon' });
     if (/필요가 있습니다|고민해|되새기|교훈|반성/.test(text)) return res.status(422).json({ error: 'preachy' });
-    // 따옴표가 있으면 없는 대사를 지어낸 것이다. 이 게임은 사실만 서술한다 → 규칙 기반 폴백
-    if (/["'“”'']/.test(text)) return res.status(422).json({ error: 'invented-quote' });
+    // 따옴표는 결정 표현을 옮겨 적을 때만 허용한다. 그 밖의 인용은 지어낸 대사다
+    // (실측: 입력에 없던 감독 발언을 통째로 창작했다).
+    const known = picks.flatMap((p) => [p.core, p.full]);
+    const cited = [...text.matchAll(/["'“”'']([^"'“”'']{1,40})["'“”'']/g)].map((m) => m[1].trim());
+    if (cited.some((q) => !known.some((k) => k.includes(q) || q.includes(k)))) {
+      return res.status(422).json({ error: 'invented-quote' });
+    }
+    // 짝이 맞지 않는 따옴표가 남아 있으면 무엇을 인용한 건지 확인할 수 없다
+    if (cited.length === 0 && /["'“”'']/.test(text)) return res.status(422).json({ error: 'invented-quote' });
     // 결정을 그대로 인용했는지 확인한다. 인용이 없으면 라벨을 제 나름대로 해석한 문장이고,
     // 그 순간 없던 사실이 섞인다(실측: 자세 변경 → "선수 교체"). 확인 못 하면 폐기가 안전하다.
     const quoted = picks.filter((p) => p.core.length >= 2 && text.includes(p.core)).length;
     if (quoted < Math.min(2, picks.length)) return res.status(422).json({ error: 'paraphrased' });
-    text = text.replace(/—/g, ',');
+    // 검사를 통과했으면 따옴표는 걷어낸다 — 결산 화면의 다른 문장들과 문체를 맞춘다
+    text = text.replace(/["'“”'']/g, '').replace(/—/g, ',');
     res.setHeader('cache-control', 'no-store');
     return res.status(200).json({ text });
   } catch {
