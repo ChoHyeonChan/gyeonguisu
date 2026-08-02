@@ -76,6 +76,8 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
   );
   const table = groupAfter(result, k, o);
   const [copied, setCopied] = useState(false);
+  // 공유·복사가 둘 다 막힌 인앱 브라우저용 — 직접 선택해 복사하게 띄운다
+  const [manualText, setManualText] = useState<string | null>(null);
   const [aiText, setAiText] = useState<string | null>(null);
 
   // 결산은 경기가 아니라 회고다. 관중을 걷고 지속음만 남겨 화면과 소리를 함께 닫는다
@@ -128,23 +130,36 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
       `나의 다섯 결정: ${path}`,
       result === 'loss' ? '나도 경우의 수 앞에 섰습니다.' : '나는 그 밤을 바꿨습니다.',
     ].join('\n');
-    try {
-      if (navigator.share) {
-        // url을 별도 필드로 넘겨야 카카오톡·메신저가 링크로 인식한다
-        await navigator.share({ title, text: body, url });
-        return;
-      }
-      throw new Error('no-share');
-    } catch (e) {
-      // 사용자가 공유 시트를 닫은 경우는 실패가 아니므로 복사로 대체하지 않는다
-      if (e instanceof DOMException && e.name === 'AbortError') return;
+    // 붙여넣었을 때 링크 미리보기가 뜨도록 주소를 마지막 줄에 단독으로 둔다
+    const full = `${title}\n${body}\n${url}`;
+
+    // 카카오톡·인스타그램 인앱 브라우저에는 공유 API가 없는 경우가 많다.
+    // canShare까지 확인해 '있는 척하는' 구현에 걸리지 않게 한다.
+    const payload = { title, text: body, url };
+    const canNativeShare =
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function' &&
+      (typeof navigator.canShare !== 'function' || navigator.canShare(payload));
+
+    if (canNativeShare) {
       try {
-        await navigator.clipboard.writeText(`${title}\n${body}\n${url}`);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
-        /* 클립보드도 막힌 환경이면 조용히 무시 */
+        await navigator.share(payload);
+        return;
+      } catch (e) {
+        // 사용자가 공유창을 닫은 것은 실패가 아니다. 복사로 대체하지 않는다.
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+        // 그 밖의 실패(권한 등)는 아래 복사로 이어간다
       }
+    }
+
+    try {
+      await navigator.clipboard.writeText(full);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2400);
+    } catch {
+      // 클립보드도 막힌 인앱 브라우저 — 직접 고를 수 있게 화면에 띄운다
+      setManualText(full);
+    }
     }
   };
 
@@ -274,8 +289,18 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
         다른 경우의 수를 살아보시겠습니까?
       </button>
       <button className="ghost wide" onClick={share}>
-        {copied ? '복사되었습니다' : '나의 다섯 결정 공유하기'}
+        {copied ? '복사했습니다 · 붙여넣으면 링크 카드가 뜹니다' : '나의 다섯 결정 공유하기'}
       </button>
+      {manualText && (
+        <textarea
+          className="share-fallback"
+          readOnly
+          rows={5}
+          value={manualText}
+          onFocus={(e) => e.currentTarget.select()}
+          aria-label="공유 문구 — 길게 눌러 복사하세요"
+        />
+      )}
       <p className="micro dim center">본 서비스는 실제 경기 기록에 기반한 가상 시뮬레이션입니다.</p>
     </div>
   );
