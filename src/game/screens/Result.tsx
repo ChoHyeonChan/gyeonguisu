@@ -1,6 +1,6 @@
 // P5 결산 — 결정 타임라인 · 그날의 벤치 vs 나 · 결산 서술(규칙 기반, D6에서 LLM 대체) · 재도전
 
-import type { MatchState, MatchResult } from '../../engine/types';
+import type { MatchState, MatchResult, MatchEventKey } from '../../engine/types';
 import { REAL_BENCH_MOVES, byNo } from '../../data/players';
 import { groupAfter } from '../../data/standings';
 import { headline, verdictText } from '../content';
@@ -32,6 +32,16 @@ const OPT_LABEL: Record<string, string> = {
   'd5-more': '쐐기 사냥',
   'no-intervention': '개입하지 않음',
 };
+
+/** 경기 기록 — 중계에 실제로 나온 이벤트만 센다.
+ *  점유율·패스성공률처럼 엔진이 계산하지 않는 지표는 만들지 않는다.
+ *  보이는 숫자와 판정하는 숫자가 같아야 한다는 원칙이 여기에도 적용된다. */
+const STATS: { label: string; kor: MatchEventKey[]; opp: MatchEventKey[] }[] = [
+  { label: '득점', kor: ['KOR_GOAL'], opp: ['OPP_GOAL'] },
+  { label: '결정적 장면', kor: ['KOR_BIG_CHANCE'], opp: ['OPP_BIG_CHANCE', 'ANCHOR_SUBCROSS'] },
+  { label: '골문 앞 위기', kor: [], opp: ['ANCHOR_HEADER', 'ANCHOR_DOUBLESAVE'] },
+  { label: '주도한 국면', kor: ['PRESSURE_KOR'], opp: ['PRESSURE_OPP'] },
+];
 
 /** 마지막에 남는 한 줄. 결과마다 다르되, 뒤따르는 후렴은 같다.
  *  무엇을 했든 실제의 그 밤은 바뀌지 않는다는 것이 이 게임이 닫히는 지점이다. */
@@ -159,6 +169,29 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
           ))}
         </tbody>
       </table>
+
+      <h3>경기 기록</h3>
+      <div className="statline">
+        {STATS.map((st) => {
+          const kor = s.events.filter((e) => st.kor.includes(e.key)).length;
+          const opp = s.events.filter((e) => st.opp.includes(e.key)).length;
+          const total = kor + opp;
+          return (
+            <div className="stat-row" key={st.label}>
+              <span className="st-n kor">{kor}</span>
+              <span className="st-name">{st.label}</span>
+              <span className="st-n">{opp}</span>
+              <span className="st-bar">
+                {/* 막대는 두 숫자의 비율 그대로다. 없는 값을 만들지 않는다 */}
+                <i style={{ width: total ? `${(kor / total) * 100}%` : '50%' }} />
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="micro dim">
+        중계에 실제로 나온 장면을 센 값입니다. 점유율처럼 계산되지 않은 지표는 만들지 않았습니다.
+      </p>
 
       <h3>당신의 다섯 결정</h3>
       <div className="timeline">
