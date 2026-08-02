@@ -43,8 +43,11 @@ export function WaitRoom(props: { result: MatchResult; score: [number, number]; 
         </>
       ) : (
         <>
+          {/* 브리핑에서 "같은 시각 체코가 멕시코를 잡지 않는 한"이라고 조건을 달았으므로
+              여기서도 같은 조건을 유지한다. 실제로는 멕시코가 체코를 3-0으로 이겼다. */}
           <div className="qualify-banner">
-            조 2위 · <b>32강 진출 확정</b>
+            조 2위 · <b>32강 진출</b>
+            {result === 'draw' && <span className="qb-note">체코가 멕시코를 잡지 못해 확정</span>}
           </div>
           <p className="dim">
             당신의 한국은 이 방에 올 필요가 없었습니다. 실제의 한국은, 이 방에서 사흘을 기다렸습니다.

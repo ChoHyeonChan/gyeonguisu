@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { MatchState, DecisionId, DecisionOption } from '../../engine/types';
 import type { Rng } from '../../engine/rng';
-import { runTick, TICK_STARTS, clampTrust, applySubs } from '../../engine/engine';
+import { runTick, TICK_STARTS, clampTrust, applySubs, subbedOff } from '../../engine/engine';
 import { cardsFor } from '../../engine/flow';
 import { applyOption } from '../../engine/decisions';
 import * as B from '../../engine/balance';
@@ -152,6 +152,10 @@ export function MatchView(props: {
 
   useEffect(() => {
     if (!decision) return;
+    // 직접 교체 시트가 열려 있으면 시간을 멈춘다.
+    // 뺄 선수를 고르고 벤치 15명에서 넣을 선수를 찾는 2단계를 10초 안에 끝낼 수 없다.
+    // 멈추지 않으면 사용자가 고르는 도중에 시트가 닫히고 '개입하지 않음'으로 기록된다.
+    if (picker) return;
     if (remain <= 0) {
       choose(null);
       return;
@@ -159,7 +163,7 @@ export function MatchView(props: {
     const t = setTimeout(() => setRemain((r) => r - 1), 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decision, remain]);
+  }, [decision, remain, picker]);
 
   const resume = () => {
     setDecision(null);
@@ -261,7 +265,9 @@ export function MatchView(props: {
 
   const paused = decision != null;
   const st = stateRef.current!;
-  const benchList = SQUAD.filter((p) => !st.onPitch.includes(p.no));
+  // 교체로 나간 선수는 다시 들어올 수 없으므로 후보 목록에서도 뺀다 (경기 규칙)
+  const goneOff = subbedOff(st);
+  const benchList = SQUAD.filter((p) => !st.onPitch.includes(p.no) && !goneOff.has(p.no));
 
   return (
     <div className={`screen match ${paused ? 'paused' : ''} ${shake ? 'shake' : ''}`}>

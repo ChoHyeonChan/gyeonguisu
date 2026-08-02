@@ -365,8 +365,10 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
       {confirmSon && (
         <div className="modal-back">
           <div className="modal">
-            <h3>이대로 벤치에 둡니까?</h3>
-            <p className="dim">12경기 연속 선발 · 그날의 벤치는 후반 시작과 함께 그를 투입했다</p>
+            {/* 선수 실명은 공고가 허용한 범위다(미사용 원칙은 감독 실명에만 해당).
+                이름이 없으면 그날 뉴스를 모르는 사람에게는 이 결정의 무게가 전달되지 않는다. */}
+            <h3>손흥민을 이대로 벤치에 둡니까?</h3>
+            <p className="dim">주장 · 12경기 연속 선발 · 그날의 벤치는 후반 시작과 함께 그를 투입했다</p>
             <div className="modal-btns">
               <button className="primary" onClick={() => props.onStart({ lineup, sonStarts: false })}>
                 벤치에 둔다 · 후반 조커 확보

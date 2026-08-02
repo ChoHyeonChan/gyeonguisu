@@ -164,6 +164,12 @@ export function probRemaining(
   return { kor: 1 - noKor, opp: 1 - noOpp };
 }
 
+/** 이미 교체로 빠져나간 선수들. 이들은 다시 그라운드에 들어올 수 없다 (경기 규칙).
+ *  카드 생성·수동 교체 후보 목록에서도 이 집합을 빼야 한다. */
+export function subbedOff(s: MatchState): Set<number> {
+  return new Set(s.usedSubs.map((u) => u.off));
+}
+
 /** 교체 실행 — 자원 추적 + 적중 판정. HT(45')는 윈도우 미소모 (실규정) */
 export function applySubs(
   s: MatchState,
@@ -177,11 +183,15 @@ export function applySubs(
 
   // 1패스: 전체 조합을 가상 적용으로 검증 — 부분 적용 후 실패가 불가능해야 한다 (원자성, 검수 반영)
   const virtual = new Set(s.onPitch);
+  const goneOff = subbedOff(s);
   for (const { off, on } of subs) {
     if (!virtual.has(off)) throw new Error(`교체 대상이 그라운드에 없음: ${off}`);
     if (virtual.has(on)) throw new Error(`이미 그라운드에 있음: ${on}`);
+    // 교체로 나간 선수는 다시 들어올 수 없다 (경기 규칙)
+    if (goneOff.has(on)) throw new Error(`이미 교체되어 나간 선수: ${on}`);
     virtual.delete(off);
     virtual.add(on);
+    goneOff.add(off);
   }
 
   // 2패스: 실제 변이

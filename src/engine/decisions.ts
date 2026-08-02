@@ -4,7 +4,7 @@
 
 import type { MatchState, DecisionOption, Posture } from './types';
 import type { Rng } from './rng';
-import { probRemaining, applyOrder, applySubs, clampTrust } from './engine';
+import { probRemaining, applyOrder, applySubs, clampTrust, subbedOff } from './engine';
 import * as B from './balance';
 
 // 소수 1자리 — 신뢰도 보정(±0.2%p대)이 표기에서 뭉개지지 않는 최소 정밀도
@@ -68,7 +68,9 @@ function pickOff(s: MatchState, prefer: number[], used: Set<number>): number | u
 }
 
 function pickOn(s: MatchState, prefer: number[], used: Set<number>): number | undefined {
-  for (const no of prefer) if (!s.onPitch.includes(no) && !used.has(no)) return no;
+  // 교체로 이미 나간 선수는 후보에서 뺀다 — 다시 들어올 수 없다 (경기 규칙)
+  const gone = subbedOff(s);
+  for (const no of prefer) if (!s.onPitch.includes(no) && !used.has(no) && !gone.has(no)) return no;
   return undefined;
 }
 

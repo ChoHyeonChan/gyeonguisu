@@ -9,6 +9,7 @@ import { playMatch, resultOf, setupMatch } from './flow';
 import { cardsD3, cardsD4, cardsD5, applyOption } from './decisions';
 import { teamScalars, widthBias } from './fitness';
 import { thirdTableFor } from '../data/standings';
+import { SQUAD } from '../data/players';
 import * as B from './balance';
 
 const fresh = (seed = 1) => createMatch(seed, realLineup());
@@ -135,6 +136,35 @@ describe('배치 적합도 → 팀 스칼라', () => {
     lu.placements.find((p) => p.playerNo === 18)!.playerNo = 14;
     const sc = teamScalars(lu);
     expect(sc.atk).toBeLessThan(1.0);
+  });
+});
+
+describe('교체로 나간 선수는 다시 들어올 수 없다 (경기 규칙)', () => {
+  // 실측으로 발견된 위반: 45' 9번이 나갔는데 65' 9번이 다시 투입됐다.
+  // applySubs가 "이미 그라운드에 있는지"만 보고 "이미 나갔는지"는 안 봤다.
+  it('한 번 교체된 선수를 다시 투입하면 거부된다', () => {
+    const s = setupMatch(7, { lineup: realLineup(), sonStarts: false });
+    const rng = mulberry32(7);
+    const off1 = s.onPitch[10];
+    const on1 = SQUAD.find((p) => !s.onPitch.includes(p.no))!.no;
+    applySubs(s, [{ off: off1, on: on1 }], true, rng);
+    expect(s.onPitch).not.toContain(off1);
+    // 방금 나간 선수를 다시 넣으려 하면 막혀야 한다
+    expect(() => applySubs(s, [{ off: on1, on: off1 }], false, rng)).toThrow();
+  });
+
+  it('교체 카드 생성도 나간 선수를 후보로 올리지 않는다', () => {
+    const s = setupMatch(12, { lineup: realLineup(), sonStarts: false });
+    const rng = mulberry32(12);
+    const off1 = s.onPitch[9];
+    const on1 = SQUAD.find((p) => !s.onPitch.includes(p.no))!.no;
+    applySubs(s, [{ off: off1, on: on1 }], true, rng);
+    const gone = new Set(s.usedSubs.map((u) => u.off));
+    for (const card of [...cardsD4(s), ...cardsD5(s)]) {
+      for (const sub of card.apply.subs ?? []) {
+        expect(gone.has(sub.on)).toBe(false);
+      }
+    }
   });
 });
 

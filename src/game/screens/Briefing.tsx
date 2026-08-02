@@ -74,7 +74,20 @@ export function Briefing(props: { onDone: () => void }) {
         <div className="slate">
           <div className="slate-line">2026.06.24 · MONTERREY</div>
           <div className="slate-line">ESTADIO BBVA · GROUP A</div>
-          <div className="slate-big">조별리그 최종전</div>
+          {/* 링크를 연 사람이 보는 첫 화면이다. 여기에 제목과 훅이 없으면
+              무엇을 하는 서비스인지 모른 채 이탈한다. og 카드와 같은 내용을 쓴다. */}
+          <h1 className="slate-title">경우의 수</h1>
+          <p className="slate-hook">
+            비기기만 해도 진출이던 그 경기.
+            <br />
+            그날의 벤치에, 이번엔 <b>당신</b>이 앉는다.
+          </p>
+          <div className="slate-meta">
+            <span className="sm-score">0 : 1</span>
+            <span className="sm-min">63&apos;</span>
+            <span className="sm-rule" />
+            <span className="sm-tag">감독 의사결정 시뮬레이션</span>
+          </div>
         </div>
       )}
 
@@ -176,7 +189,7 @@ export function Briefing(props: { onDone: () => void }) {
           소리를 켤 방법이 화면에서 없어진다. 켜기 전까지는 계속 남아 있어야 한다. */}
       {!soundOn && (
         <button className={`sound-cue ${beat === 0 ? 'start' : ''}`} onClick={turnOnSound}>
-          {beat === 0 ? '🔊 소리를 켜고 시작합니다' : '🔊 소리를 켜면 경기장이 들립니다'}
+          {beat === 0 ? '벤치에 앉는다  🔊' : '🔊 소리를 켜면 경기장이 들립니다'}
         </button>
       )}
 
