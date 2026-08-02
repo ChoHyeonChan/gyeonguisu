@@ -71,6 +71,11 @@ export function WaitRoom(props: { result: MatchResult; score: [number, number]; 
         ))}
       </div>
 
+      {/* 순위표는 두 경기가 끝난 뒤의 확정값만 보여준다.
+          '경기 전 순위'는 어느 조 3위팀이 그날 밤에 아직 경기를 남겨두고 있었는지
+          확인해야 만들 수 있는데 그 근거를 확보하지 못했다. 확인되지 않은 순위 변동을
+          움직이는 그림으로 보여주는 것은 이 프로젝트가 지키기로 한 선을 넘는다
+          (docs/sources.md — 불확실한 수치는 배제한다). */}
       {visible && (
         <table className="third-table">
           <thead>
