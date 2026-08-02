@@ -301,6 +301,26 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
     (p) => lineup.slots.find((s) => s.id === p.slotId)!.band === 'GK',
   );
 
+  /** 골키퍼를 골문 앞으로 되돌린다. 막아만 두면 빠져나올 방법이 없어 갇힌다.
+   *  본래 GK인 선수를 우선으로, 없으면 가장 뒤에 선 선수를 내린다. */
+  const fixKeeper = () =>
+    setLineup((lu) => {
+      const target =
+        lu.placements.find((p) => byNo(p.playerNo).bands[0] === 'GK') ??
+        [...lu.placements].sort((a, b) => {
+          const sa = lu.slots.find((s) => s.id === a.slotId)!;
+          const sb = lu.slots.find((s) => s.id === b.slotId)!;
+          return sb.y - sa.y;
+        })[0];
+      return {
+        ...lu,
+        formation: 'custom',
+        slots: lu.slots.map((s) =>
+          s.id === target.slotId ? { ...s, x: 50, y: 92, band: 'GK' as const } : s,
+        ),
+      };
+    });
+
   const start = () => {
     audio.unlock();
     if (noKeeper) return; // 버튼이 이미 비활성이지만 방어적으로
@@ -408,8 +428,19 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
             : '끌어다 놓아도 되고 눌러서 옮겨도 됩니다. 높이가 역할을, 좌우 폭이 전개 방식을 정합니다'}
       </p>
 
+      {noKeeper && (
+        <div className="gk-warn">
+          <p>
+            골문 앞이 비었습니다. 맨 아래 <b>골키퍼 구역</b>에 한 명을 두어야 경기를 시작할 수 있습니다.
+          </p>
+          <button className="gk-fix" onClick={fixKeeper}>
+            골키퍼 자리에 되돌리기
+          </button>
+        </div>
+      )}
+
       <button className="cta wide" onClick={start} disabled={noKeeper}>
-        {noKeeper ? '골키퍼 자리를 채워야 시작합니다' : '경기 시작'}
+        {noKeeper ? '골키퍼가 없습니다' : '경기 시작'}
       </button>
 
       <Coachmarks marks={GUIDE} storageKey="gsu-guide-locker" />
