@@ -53,6 +53,9 @@ export function MatchView(props: {
   const [hud, setHud] = useState({ score: s.score, trust: s.trust, subs: s.subsRemaining });
   const [clock, setClock] = useState(0);
   const [decision, setDecision] = useState<{ id: Exclude<DecisionId, 'D1'>; cards: DecisionOption[]; total: number } | null>(null);
+  // visibilitychange 핸들러는 마운트 시점 클로저라 최신 decision을 못 본다. ref로 읽는다
+  const decisionRef = useRef(decision);
+  decisionRef.current = decision;
   const [remain, setRemain] = useState(0);
   const [coachmark, setCoachmark] = useState(firstPlay);
   const [flash, setFlash] = useState<null | 'k' | 'o'>(null);
@@ -250,6 +253,11 @@ export function MatchView(props: {
         clearTimeout(timer.current);
         timer.current = null;
       } else if (!document.hidden && !timer.current && !stateRef.current?.finished) {
+        // 결정 시트가 떠 있는 동안은 틱 타이머가 원래 없다. 여기서 다시 걸면
+        // advance가 같은 결정을 재진입시켜 제한시간이 처음부터 돌아간다.
+        // 탭을 왔다 갔다 하는 것만으로 "시간이 다 가면 개입하지 않은 것이 된다"는
+        // 규칙이 무력화된다.
+        if (decisionRef.current) return;
         timer.current = setTimeout(advance, 800);
       }
     };
@@ -265,9 +273,16 @@ export function MatchView(props: {
 
   const paused = decision != null;
   const st = stateRef.current!;
-  // 교체로 나간 선수는 다시 들어올 수 없으므로 후보 목록에서도 뺀다 (경기 규칙)
+  // 교체로 나간 선수는 다시 들어올 수 없으므로 후보 목록에서도 뺀다 (경기 규칙).
+  // 골키퍼는 골키퍼 자리에만 넣는다 — 필드 플레이어 자리에 GK를 세우면 화면이 이상해진다.
   const goneOff = subbedOff(st);
-  const benchList = SQUAD.filter((p) => !st.onPitch.includes(p.no) && !goneOff.has(p.no));
+  const offIsGK = picker?.off != null && byNo(picker.off).bands[0] === 'GK';
+  const benchList = SQUAD.filter(
+    (p) =>
+      !st.onPitch.includes(p.no) &&
+      !goneOff.has(p.no) &&
+      (p.bands[0] === 'GK') === offIsGK,
+  );
 
   return (
     <div className={`screen match ${paused ? 'paused' : ''} ${shake ? 'shake' : ''}`}>
@@ -304,7 +319,7 @@ export function MatchView(props: {
         )}
       </div>
 
-      <div className="feed">
+      <div className="feed" role="log" aria-live="polite" aria-label="경기 중계">
         {feed.map((f) => (
           <div key={f.id} className={`feed-item ${f.kind}`}>
             <span className="fmin">{f.minute}</span>
@@ -324,7 +339,7 @@ export function MatchView(props: {
       )}
 
       {paused && decision && !picker && (
-        <div className="decision-back">
+        <div className="decision-back" role="dialog" aria-modal="true" aria-label="결정의 순간">
           <div className="vignette" />
           <div className="decision-sheet">
             <div className="d-head">
@@ -336,7 +351,7 @@ export function MatchView(props: {
             <div className="d-timer">
               <div className="d-timer-fill" style={{ width: `${(remain / decision.total) * 100}%` }} />
             </div>
-            <div className="d-remain">{remain}초</div>
+            <div className="d-remain" role="timer" aria-live="assertive">{remain}초</div>
             {decision.cards.map((c) => (
               <button key={c.id} className={`d-card ${c.disabled ? 'off' : ''}`} disabled={!!c.disabled} onClick={() => choose(c.id)}>
                 <span className="d-coach">{c.coach}</span>
@@ -356,7 +371,7 @@ export function MatchView(props: {
       )}
 
       {picker && (
-        <div className="decision-back">
+        <div className="decision-back" role="dialog" aria-modal="true" aria-label="결정의 순간">
           <div className="vignette" />
           <div className="decision-sheet picker">
             <div className="d-head">

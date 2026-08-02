@@ -16,6 +16,9 @@ const OPT_LABEL: Record<string, string> = {
   'd3-likebench': '3장 동시 교체 + 전환',
   'd3-pinpoint': '핀포인트 1장',
   'd3-calm': '무교체 · 독려',
+  // 직접 고르기 카드. 없으면 결산과 공유 문구에 raw id(d3-manual)가 그대로 나온다
+  'd3-manual': '교체 명단을 직접 지정',
+  'd4-manual': '교체 카드를 직접 지정',
   'd4-target': '타깃맨 투입',
   'd4-reshape': '시스템 재전환',
   'd4-calm': '동요 억제',

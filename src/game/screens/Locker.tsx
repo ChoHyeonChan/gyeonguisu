@@ -260,22 +260,32 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
     setSelBench(null);
   };
 
+  // 골키퍼 없이 나가면 중계 문장의 이름 자리가 비고("선수가 버텨줍니다"),
+  // 화면상 11명이라 무엇이 잘못됐는지도 안 보인다. 시작 전에 막는다.
+  const noKeeper = !lineup.placements.some(
+    (p) => lineup.slots.find((s) => s.id === p.slotId)!.band === 'GK',
+  );
+
   const start = () => {
     audio.unlock();
+    if (noKeeper) return; // 버튼이 이미 비활성이지만 방어적으로
     if (!placedNos.includes(7)) setConfirmSon(true);
     else props.onStart({ lineup, sonStarts: true });
   };
 
+  // 상태 업데이터 안에서 부모 콜백을 부르면 안 된다. 업데이터는 순수해야 하고
+  // React가 재실행할 수 있어 begin()이 두 번 돌 여지가 생긴다. 밖에서 계산해 넘긴다.
   const sonToXI = () => {
-    setLineup((lu) => {
-      const spot =
-        lu.placements.find((p) => p.playerNo === 11) ??
-        lu.placements.find((p) => lu.slots.find((s) => s.id === p.slotId)!.band === 'FW')!;
-      const next = { ...lu, placements: lu.placements.map((p) => (p === spot ? { ...p, playerNo: 7 } : p)) };
-      props.onStart({ lineup: next, sonStarts: true });
-      return next;
-    });
+    const spot =
+      lineup.placements.find((p) => p.playerNo === 11) ??
+      lineup.placements.find((p) => lineup.slots.find((s) => s.id === p.slotId)!.band === 'FW')!;
+    const next = {
+      ...lineup,
+      placements: lineup.placements.map((p) => (p === spot ? { ...p, playerNo: 7 } : p)),
+    };
+    setLineup(next);
     setConfirmSon(false);
+    props.onStart({ lineup: next, sonStarts: true });
   };
 
   return (
@@ -356,14 +366,14 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
             : '끌어다 놓아도 되고 눌러서 옮겨도 됩니다. 높이가 역할을, 좌우 폭이 전개 방식을 정합니다'}
       </p>
 
-      <button className="cta wide" onClick={start}>
-        경기 시작
+      <button className="cta wide" onClick={start} disabled={noKeeper}>
+        {noKeeper ? '골키퍼 자리를 채워야 시작합니다' : '경기 시작'}
       </button>
 
       <Coachmarks marks={GUIDE} storageKey="gsu-guide-locker" />
 
       {confirmSon && (
-        <div className="modal-back">
+        <div className="modal-back" role="dialog" aria-modal="true" aria-label="선발 확인">
           <div className="modal">
             {/* 선수 실명은 공고가 허용한 범위다(미사용 원칙은 감독 실명에만 해당).
                 이름이 없으면 그날 뉴스를 모르는 사람에게는 이 결정의 무게가 전달되지 않는다. */}
