@@ -107,21 +107,26 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
 
   const share = async () => {
     const path = s.decisions.map((d) => OPT_LABEL[d.optionId] ?? d.optionId).join(' → ');
-    const text = [
-      '경우의 수 — 그날, 몬테레이의 벤치',
+    // 링크가 없으면 공유가 유입으로 이어지지 않는다. 주소를 반드시 함께 보낸다.
+    const url = typeof location !== 'undefined' ? location.origin + location.pathname : '';
+    const title = '경우의 수 — 그날, 몬테레이의 벤치';
+    const body = [
       `KOR ${k} : ${o} RSA`,
       `나의 다섯 결정: ${path}`,
-      result === 'loss' ? '나도 경우의 수 앞에 섰다.' : '나는 그 밤을 바꿨다.',
+      result === 'loss' ? '나도 경우의 수 앞에 섰습니다.' : '나는 그 밤을 바꿨습니다.',
     ].join('\n');
     try {
       if (navigator.share) {
-        await navigator.share({ text });
+        // url을 별도 필드로 넘겨야 카카오톡·메신저가 링크로 인식한다
+        await navigator.share({ title, text: body, url });
         return;
       }
       throw new Error('no-share');
-    } catch {
+    } catch (e) {
+      // 사용자가 공유 시트를 닫은 경우는 실패가 아니므로 복사로 대체하지 않는다
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(`${title}\n${body}\n${url}`);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch {
@@ -196,10 +201,19 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
       </div>
       <p className="micro dim">판정하지 않습니다. 기록을 나란히 둘 뿐입니다.</p>
 
-      <h3>결산 {aiText && <span className="ai-badge">AI</span>}</h3>
+      <h3>
+        결산 {aiText && <span className="ai-badge">AI가 쓴 문장</span>}
+      </h3>
       <div className="verdict">
         {aiText ? <p>{aiText}</p> : verdict.map((v, i) => <p key={i}>{v}</p>)}
       </div>
+      {/* AI가 썼다는 사실과 그 범위를 밝힌다. 공모전 AI 활용 고지이기도 하다 */}
+      {aiText && (
+        <p className="micro dim">
+          이 문단은 당신의 다섯 결정과 경기 결과를 받아 그 자리에서 생성된 문장입니다. 실존 인물을 지칭하거나
+          우열을 판정하는 표현은 걸러집니다.
+        </p>
+      )}
 
       {history.length > 1 && (
         <>
