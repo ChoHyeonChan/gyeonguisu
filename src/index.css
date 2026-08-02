@@ -715,6 +715,12 @@ body::before {
 .verdict { background: var(--slate); border-left: 3px solid var(--amber); padding: 14px 16px; font-size: 0.89rem; }
 .verdict p + p { margin-top: 7px; }
 .ai-badge { font-size: 0.56rem; background: var(--amber); color: var(--ink); padding: 2px 6px; vertical-align: 2px; margin-left: 7px; font-weight: 900; letter-spacing: 0.1em; }
+/* 가상 시뮬레이션 고지 — 신뢰도 게이지 바로 아래 */
+.sim-note {
+  font-size: 0.6rem; color: var(--fog); opacity: 0.65;
+  letter-spacing: 0.06em; margin: 2px 0 8px;
+}
+
 /* 공유·복사가 둘 다 막힌 인앱 브라우저용 — 직접 선택해 복사 */
 .share-fallback {
   width: 100%; margin-top: 10px; padding: 11px 12px;

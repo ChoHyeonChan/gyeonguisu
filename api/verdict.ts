@@ -48,6 +48,9 @@ export default async function handler(req: { method?: string; body?: unknown }, 
     'D1 D2 D3 D4 D5 같은 기호를 문장에 쓰지 않는다. "하프타임에", "후반 65분에"처럼 시각으로 쓴다.',
     '조언·훈계·교훈을 쓰지 않는다. "돌아볼 필요가 있습니다", "고민해야 합니다" 같은 문장은 금지한다.',
     '벌어진 일만 적는다. 마지막 문장도 사실로 끝낸다.',
+    // 실측: 입력에 없던 감독 발언("선제골을 노려야 한다")을 통째로 지어냈다.
+    '감독이나 선수의 대사·발언을 지어내지 않는다. 따옴표를 쓰지 않는다.',
+    '주어진 결정 라벨과 스코어, 신뢰도 값 밖의 사실을 만들어내지 않는다.',
     '긴 대시(—) 사용 금지. 과장 금지. 감탄사 금지.',
   ].join('\n');
   const user = `경기 결과: 한국 ${b.score?.[0] ?? 0} : ${b.score?.[1] ?? 0} 남아공 (${b.result}). 종료 시점 선수단 신뢰도 ${b.trust}. 감독의 결정: ${path}`;
@@ -80,6 +83,8 @@ export default async function handler(req: { method?: string; body?: unknown }, 
     // 내부 식별자 노출·훈계조는 폐기 → 규칙 기반 서술로 폴백
     if (/\bD[1-5]\b/.test(text)) return res.status(422).json({ error: 'jargon' });
     if (/필요가 있습니다|고민해|되새기|교훈|반성/.test(text)) return res.status(422).json({ error: 'preachy' });
+    // 따옴표가 있으면 없는 대사를 지어낸 것이다. 이 게임은 사실만 서술한다 → 규칙 기반 폴백
+    if (/["'“”'']/.test(text)) return res.status(422).json({ error: 'invented-quote' });
     text = text.replace(/—/g, ',');
     res.setHeader('cache-control', 'no-store');
     return res.status(200).json({ text });

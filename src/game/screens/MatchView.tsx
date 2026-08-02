@@ -309,6 +309,8 @@ export function MatchView(props: {
           {sound ? '🔊' : '🔇'}
         </button>
       </div>
+      {/* 기획서 §8 — 신뢰도 게이지 근처에 가상 시뮬레이션임을 명시한다 */}
+      <p className="sim-note">실제 경기 기록에 기반한 가상 시뮬레이션입니다</p>
 
       <div className="pitch-wrap">
         <LivePitch lineup={st.lineup} onPitch={st.onPitch} seq={seq} seqId={seqNo.current} paused={paused} />
