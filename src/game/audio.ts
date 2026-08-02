@@ -6,6 +6,7 @@ class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private crowd: GainNode | null = null;
+  private drn: GainNode | null = null;
   private meter: AnalyserNode | null = null;
   enabled = true;
 
@@ -66,6 +67,39 @@ class AudioEngine {
       src.connect(lp).connect(this.crowd).connect(this.master);
       src.start();
 
+      // 드론 — 음정이 있는 지속음. 웅성거림만으로는 도입부가 허전하다.
+      // 음원 파일을 넣으면 '파일 0개' 구조가 깨지므로 여기서도 합성한다.
+      // A2(110) + E3(164.8) 완전5도. 42Hz 초저음은 노트북·폰 스피커가 재생하지 못하므로
+      // 배음이 많은 톱니파를 써서 220·330Hz대에 실제로 들리는 성분을 남긴다.
+      this.drn = this.ctx.createGain();
+      this.drn.gain.value = 0;
+      const dlp = this.ctx.createBiquadFilter();
+      dlp.type = 'lowpass';
+      dlp.frequency.value = 520;
+      dlp.Q.value = 0.7;
+      dlp.connect(this.drn).connect(this.master);
+      for (const [type, hz, lvl] of [
+        ['sawtooth', 110, 0.5],
+        ['sawtooth', 164.81, 0.34],
+        ['triangle', 220, 0.22],
+      ] as const) {
+        const o = this.ctx.createOscillator();
+        o.type = type;
+        o.frequency.value = hz;
+        o.detune.value = (Math.random() - 0.5) * 8; // 미세 디튠 — 기계적으로 안 들리게
+        const g = this.ctx.createGain();
+        g.gain.value = lvl;
+        o.connect(g).connect(dlp);
+        o.start();
+      }
+      // 아주 느린 필터 흔들림 — 정지된 소리가 아니라 숨쉬는 소리로
+      const lfo = this.ctx.createOscillator();
+      lfo.frequency.value = 0.05;
+      const lfoGain = this.ctx.createGain();
+      lfoGain.gain.value = 130;
+      lfo.connect(lfoGain).connect(dlp.frequency);
+      lfo.start();
+
       // 웅성거림이 살아있게 느껴지도록 완만한 랜덤 스웰 (앱 수명 동안 유지)
       window.setInterval(() => {
         if (!this.ctx || !this.crowd) return;
@@ -87,6 +121,14 @@ class AudioEngine {
   }
 
   ambient() { this.ramp(0.18, 1.2); }
+
+  /** 드론 페이드. 0이면 끈다. 페이드가 길어야 '켜졌다'가 아니라 '있었다'로 들린다 */
+  drone(v: number, sec = 3.5) {
+    if (!this.ctx || !this.drn) return;
+    this.drn.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.drn.gain.setValueAtTime(this.drn.gain.value, this.ctx.currentTime);
+    this.drn.gain.linearRampToValueAtTime(v, this.ctx.currentTime + sec);
+  }
   /** 결정의 순간 — 관중 소음 컷 */
   cut() { this.ramp(0.0, 0.35); }
   resumeAmbient() { this.ramp(0.18, 0.9); }

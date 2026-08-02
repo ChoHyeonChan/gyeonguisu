@@ -7,7 +7,7 @@ import { realLineup } from './formations';
 import { mulberry32 } from './rng';
 import { playMatch, resultOf, setupMatch } from './flow';
 import { cardsD3, cardsD4, cardsD5, applyOption } from './decisions';
-import { teamScalars } from './fitness';
+import { teamScalars, widthBias } from './fitness';
 import { thirdTableFor } from '../data/standings';
 import * as B from './balance';
 
@@ -135,6 +135,68 @@ describe('배치 적합도 → 팀 스칼라', () => {
     lu.placements.find((p) => p.playerNo === 18)!.playerNo = 14;
     const sc = teamScalars(lu);
     expect(sc.atk).toBeLessThan(1.0);
+  });
+});
+
+describe('자세는 제 일을 해야 한다 — 순손해인 자세가 없어야 한다', () => {
+  // 예전 값(low [0.70,0.72], high [1.25,1.32])은 잠그면 득점이 더 깎이고
+  // 밀어붙이면 실점이 더 올라 두 자세 모두 순손해였다. 그래서 무엇을 골라도
+  // 결과가 같았다(전략 간 32강 확률 차 1.7%p). 같은 함정을 다시 만들지 않기 위한 회귀 테스트.
+  it('잠그기는 득점보다 실점을 더 줄인다 (리드를 지킬 때 이득)', () => {
+    const [atk, def] = B.POSTURE_MOD.low;
+    expect(def).toBeLessThan(atk);
+  });
+
+  it('밀어붙이기는 실점보다 득점을 더 올린다 (쫓아갈 때 이득)', () => {
+    const [atk, def] = B.POSTURE_MOD.high;
+    expect(atk).toBeGreaterThan(def);
+  });
+
+  it('총공세는 득점도 실점도 가장 크다 (도박)', () => {
+    expect(B.POSTURE_MOD.allout[0]).toBeGreaterThan(B.POSTURE_MOD.high[0]);
+    expect(B.POSTURE_MOD.allout[1]).toBeGreaterThan(B.POSTURE_MOD.high[1]);
+  });
+
+  it('62분 앵커도 자세에 따라 크게 갈린다 (서명 장면의 체감)', () => {
+    const g = B.ANCHOR62_GOAL_BY_POSTURE;
+    expect(g.allout - g.low).toBeGreaterThan(0.5);
+    expect(g.low).toBeLessThan(g.normal);
+    expect(g.high).toBeGreaterThan(g.normal);
+  });
+});
+
+describe('폭 — 좌우로 벌린 배치가 중앙 밀집과 달라야 한다', () => {
+  /** 밴드는 그대로 두고 x만 바꾼다 — 폭만의 효과를 분리하기 위해 */
+  const withSpread = (mult: number) => {
+    const lu = realLineup();
+    lu.slots = lu.slots.map((s) =>
+      s.band === 'GK' ? s : { ...s, x: 50 + (s.x - 50) * mult },
+    );
+    return lu;
+  };
+
+  it('실제 선발의 폭이 기준(0)이다', () => {
+    expect(widthBias(realLineup())).toBeCloseTo(0);
+  });
+
+  it('넓게 벌리면 공격이 오르고 수비가 내려간다', () => {
+    const wide = teamScalars(withSpread(3));
+    expect(widthBias(withSpread(3))).toBeGreaterThan(0);
+    expect(wide.atk).toBeGreaterThan(1.0);
+    expect(wide.def).toBeLessThan(1.0);
+  });
+
+  it('중앙으로 모으면 반대로 간다', () => {
+    const narrow = teamScalars(withSpread(0));
+    expect(widthBias(withSpread(0))).toBeLessThan(0);
+    expect(narrow.atk).toBeLessThan(1.0);
+    expect(narrow.def).toBeGreaterThan(1.0);
+  });
+
+  it('효과에 상한이 있다 — 극단으로 벌려도 밴드 배치를 뒤집지 못한다', () => {
+    const insane = teamScalars(withSpread(50));
+    expect(insane.atk).toBeLessThan(1.0 + B.WIDTH_ATK_SPAN + 1e-9);
+    expect(insane.def).toBeGreaterThan(1.0 - B.WIDTH_DEF_SPAN - 1e-9);
   });
 });
 

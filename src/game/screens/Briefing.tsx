@@ -1,4 +1,4 @@
-// P1 브리핑 — 중계 콜드 오픈
+﻿// P1 브리핑 — 중계 콜드 오픈
 // 슬레이트가 타이핑되고, 앞선 두 경기가 좌우에서 박히고, 순위가 서고, 미션이 남는다.
 // 읽는 화면이 아니라 흘러가는 오프닝이다 (기획서 §3 온보딩).
 
@@ -7,13 +7,18 @@ import { GROUP_A_BEFORE } from '../../data/standings';
 import { audio } from '../audio';
 
 const BEATS = 5;
-const DUR = [2900, 2500, 2500, 2900, 99999]; // 마지막 비트는 사용자가 넘긴다
+// 0 = 자동으로 넘기지 않고 사용자를 기다린다.
+// 첫 비트를 기다리게 하는 이유: 브라우저는 사용자가 한 번 누르기 전까지 오디오를 시작할 수 없다.
+// 오프닝이 혼자 흘러가버리면 소리가 뒤늦게 따라붙는다. 시작 자체를 사용자에게 맡기면
+// 첫 프레임부터 소리가 함께 간다. 마지막 비트도 사용자가 넘긴다.
+const DUR = [0, 2500, 2500, 2900, 0];
 
 export function Briefing(props: { onDone: () => void }) {
   const [beat, setBeat] = useState(0);
 
   useEffect(() => {
     if (beat >= BEATS - 1) return;
+    if (DUR[beat] === 0) return; // 사용자 입력 대기
     const t = setTimeout(() => setBeat((b) => b + 1), DUR[beat]);
     return () => clearTimeout(t);
   }, [beat]);
@@ -31,15 +36,22 @@ export function Briefing(props: { onDone: () => void }) {
     audio.unlock();
     if (!soundOn) {
       audio.ambient(); // 경기장 웅성거림으로 콜드 오픈에 공기를 넣는다
+      audio.drone(0.065); // 그 위에 낮은 지속음 — 웅성거림만으로는 너무 조용하다
       setSoundOn(true);
     }
     if (beat < BEATS - 1) setBeat((b) => b + 1);
   };
 
+  // 첫 비트에서는 이 버튼이 곧 '시작'이다. 이후에 눌리면 소리만 켜고 내용은 건너뛰지 않는다.
   const turnOnSound = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (beat === 0) {
+      advance();
+      return;
+    }
     audio.unlock();
     audio.ambient();
+    audio.drone(0.065);
     audio.tick();
     setSoundOn(true);
   };
@@ -63,11 +75,6 @@ export function Briefing(props: { onDone: () => void }) {
           <div className="slate-line">2026.06.24 · MONTERREY</div>
           <div className="slate-line">ESTADIO BBVA · GROUP A</div>
           <div className="slate-big">조별리그 최종전</div>
-          {!soundOn && (
-            <button className="sound-cue" onClick={turnOnSound}>
-              🔊 소리를 켜면 경기장이 들립니다
-            </button>
-          )}
         </div>
       )}
 
@@ -163,6 +170,14 @@ export function Briefing(props: { onDone: () => void }) {
             라커룸으로
           </button>
         </div>
+      )}
+
+      {/* 비트는 2.9초마다 저절로 넘어간다. 이 버튼을 첫 비트 안에 두면 3초 만에 사라져
+          소리를 켤 방법이 화면에서 없어진다. 켜기 전까지는 계속 남아 있어야 한다. */}
+      {!soundOn && (
+        <button className={`sound-cue ${beat === 0 ? 'start' : ''}`} onClick={turnOnSound}>
+          {beat === 0 ? '🔊 소리를 켜고 시작합니다' : '🔊 소리를 켜면 경기장이 들립니다'}
+        </button>
       )}
 
       <div className="beat-progress">

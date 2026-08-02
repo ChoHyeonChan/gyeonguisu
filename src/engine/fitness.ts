@@ -3,7 +3,10 @@
 
 import { byNo, type Band } from '../data/players';
 import type { Lineup } from './types';
-import { FIT_NATURAL, FIT_ADJACENT, FIT_MISFIT, FIT_GK_WRONG } from './balance';
+import {
+  FIT_NATURAL, FIT_ADJACENT, FIT_MISFIT, FIT_GK_WRONG,
+  WIDTH_ATK_SPAN, WIDTH_DEF_SPAN, WIDTH_REF_SPAN,
+} from './balance';
 import { realLineup } from './formations';
 
 const ADJ: Record<Band, Band[]> = {
@@ -46,11 +49,34 @@ function rawScalars(lineup: Lineup): TeamScalars {
   return { atk, def };
 }
 
-// 기준점: 그날의 실제 선발(3-4-3) = 1.0 / 1.0
-const REF = rawScalars(realLineup());
+/** 필드 플레이어의 평균 좌우 이탈도. 0이면 전원 중앙, 클수록 넓게 벌린 것이다.
+ *  높이(band)만 보던 계산에 폭을 더한다 — 투톱+투윙처럼 좌우로 벌리는 배치가
+ *  중앙에 몰아넣는 배치와 실제로 달라야 하기 때문이다. */
+export function spreadOf(lineup: Lineup): number {
+  const outfield = lineup.placements
+    .map((pl) => lineup.slots.find((s) => s.id === pl.slotId)!)
+    .filter((s) => s.band !== 'GK');
+  if (!outfield.length) return 0;
+  return outfield.reduce((a, s) => a + Math.abs(s.x - 50), 0) / outfield.length;
+}
+
+// 기준점: 그날의 실제 선발(3-4-3) = 1.0 / 1.0, 폭도 이 배치를 0으로 둔다
+const REAL = realLineup();
+const REF = rawScalars(REAL);
+const REF_SPREAD = spreadOf(REAL);
+
+/** −1(최대한 좁힘) ~ +1(최대한 넓힘). 실제 선발과 같은 폭이면 0 */
+export function widthBias(lineup: Lineup): number {
+  const d = (spreadOf(lineup) - REF_SPREAD) / WIDTH_REF_SPAN;
+  return Math.max(-1, Math.min(1, d));
+}
 
 /** 정규화된 팀 스칼라 — 실제 선발 기준 1.0 */
 export function teamScalars(lineup: Lineup): TeamScalars {
   const raw = rawScalars(lineup);
-  return { atk: raw.atk / REF.atk, def: raw.def / REF.def };
+  const w = widthBias(lineup);
+  return {
+    atk: (raw.atk / REF.atk) * (1 + WIDTH_ATK_SPAN * w),
+    def: (raw.def / REF.def) * (1 - WIDTH_DEF_SPAN * w),
+  };
 }

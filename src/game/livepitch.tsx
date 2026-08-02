@@ -31,6 +31,15 @@ function fill(seq: Waypoint[], totalMs: number, zone: [number, number]): Waypoin
 
 const TICK_FILL = 4600;
 
+/** 상대 진영(4-4-2). 이름도 번호도 붙이지 않는다 — 실존 선수를 특정하지 않기 위해서다.
+ *  y=0이 상대 골문이므로 골키퍼가 맨 위, 공격수가 중앙선 아래쪽에 선다. */
+const OPP_SHAPE: { x: number; y: number; gk?: boolean }[] = [
+  { x: 50, y: 7, gk: true },
+  { x: 20, y: 24 }, { x: 40, y: 21 }, { x: 60, y: 21 }, { x: 80, y: 24 },
+  { x: 18, y: 40 }, { x: 40, y: 38 }, { x: 60, y: 38 }, { x: 82, y: 40 },
+  { x: 42, y: 57 }, { x: 58, y: 57 },
+];
+
 /** 이벤트별 공 궤적 — 중계 화면의 문법 */
 export function seqFor(key: MatchEventKey): Waypoint[] {
   switch (key) {
@@ -189,6 +198,19 @@ export function LivePitch(props: {
       <div className="pline circle" />
       <div className="pline boxT" />
       <div className="pline boxB" />
+
+      {/* 상대 — 같은 공을 향해 함께 움직이되 반응을 덜 한다. 그래야 우리가 밀어붙일 때
+          두 블록 간격이 좁혀지는 게 보인다. */}
+      <div className="lines opp" style={{ transform: `translateY(${-push * 0.62}%)` }}>
+        {OPP_SHAPE.map((o, i) => (
+          <div
+            key={i}
+            className={`dot opp ${o.gk ? 'gk' : ''}`}
+            style={{ left: `${o.x + (o.gk ? 0 : (ball.x - o.x) * 0.05)}%`, top: `${o.y}%` }}
+            aria-hidden="true"
+          />
+        ))}
+      </div>
 
       <div className="lines" style={{ transform: `translateY(${-push}%)` }}>
         {lineup.placements.map((pl) => {

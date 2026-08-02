@@ -65,6 +65,16 @@ export function MatchView(props: {
     setFeed((f) => [{ ...item, id: feedId.current++ }, ...f].slice(0, 40));
   }, []);
 
+  /** 교체 번호판 — 실제 중계처럼 누가 나가고 누가 들어오는지 번호로 보여준다 */
+  const [board, setBoard] = useState<{ off: number; on: number }[] | null>(null);
+  const boardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showBoard = useCallback((subs: { off: number; on: number }[]) => {
+    if (!subs.length) return;
+    setBoard(subs.slice(0, 3)); // 한 윈도우에 3장이 최대다
+    if (boardTimer.current) clearTimeout(boardTimer.current);
+    boardTimer.current = setTimeout(() => setBoard(null), FAST ? 1500 : 3800);
+  }, []);
+
   const syncHud = useCallback(() => {
     const st = stateRef.current!;
     setHud({ score: [...st.score] as [number, number], trust: st.trust, subs: st.subsRemaining });
@@ -173,7 +183,10 @@ export function MatchView(props: {
     }
 
     if (opt && !opt.disabled) {
+      // 카드가 교체를 포함할 수 있다. 적용 전후를 비교해 이번에 들어간 교체만 번호판에 올린다
+      const before = st.usedSubs.length;
       applyOption(st, opt, rng, { atHT: d.id === 'D3' });
+      showBoard(st.usedSubs.slice(before).map((u) => ({ off: u.off, on: u.on })));
       st.decisions.push({ id: d.id, optionId: opt.id, minute, alts });
       push({ minute: `${minute}'`, text: `벤치의 결정 · ${opt.coach.replace(/"/g, '')}`, kind: 'sys' });
     } else {
@@ -196,6 +209,7 @@ export function MatchView(props: {
     try {
       applySubs(st, [{ off, on }], picker!.id === 'D3', rng);
       st.atkScalar += 0.06;
+      showBoard([{ off, on }]);
       push({
         minute: `${TICK_STARTS[tickIdx.current]}'`,
         text: `교체 · ${byNo(off).name} 나가고 ${byNo(on).name} 들어갑니다.`,
@@ -225,6 +239,7 @@ export function MatchView(props: {
   useEffect(() => {
     if (coachmark) return;
     audio.ambient();
+    audio.drone(0, 2.2); // 킥오프하면 지속음을 걷는다. 경기는 관중 소리로 끌고 간다
     timer.current = setTimeout(advance, 1400);
     const onVis = () => {
       if (document.hidden && timer.current) {
@@ -239,6 +254,7 @@ export function MatchView(props: {
       document.removeEventListener('visibilitychange', onVis);
       if (timer.current) clearTimeout(timer.current);
       if (clockTimer.current) clearInterval(clockTimer.current);
+      if (boardTimer.current) clearTimeout(boardTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachmark]);
@@ -259,7 +275,28 @@ export function MatchView(props: {
         </button>
       </div>
 
-      <LivePitch lineup={st.lineup} onPitch={st.onPitch} seq={seq} seqId={seqNo.current} paused={paused} />
+      <div className="pitch-wrap">
+        <LivePitch lineup={st.lineup} onPitch={st.onPitch} seq={seq} seqId={seqNo.current} paused={paused} />
+        {board && (
+          <div className="subboard" aria-live="polite">
+            <div className="sb-head">교체</div>
+            {board.map((b) => (
+              <div className="sb-row" key={`${b.off}-${b.on}`}>
+                <span className="sb-in">
+                  <i>▲</i>
+                  <b>{b.on}</b>
+                  {byNo(b.on).name}
+                </span>
+                <span className="sb-out">
+                  <i>▼</i>
+                  <b>{b.off}</b>
+                  {byNo(b.off).name}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="feed">
         {feed.map((f) => (

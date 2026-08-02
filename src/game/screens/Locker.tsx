@@ -1,6 +1,7 @@
 // P2 라커룸 — 이중 조작계 + 자유 배치 (기획서 §5-4)
 // 프리셋은 빠른 시작일 뿐, 선수를 피치 아무 곳에나 놓아 원하는 형태를 만들 수 있다.
-// 놓인 높이로 밴드(GK/DF/MF/FW)가 다시 판정되므로 투톱+양날개 같은 전술이 실제로 성립한다.
+// 놓인 높이로 밴드(GK/DF/MF/FW)가 다시 판정되고, 좌우로 벌린 정도는 폭 스칼라로 들어간다.
+// 그래서 투톱+양날개처럼 넓게 서는 전술이 중앙에 몰아넣는 배치와 실제로 다른 결과를 낸다.
 
 import { useMemo, useRef, useState } from 'react';
 import {
@@ -16,7 +17,32 @@ import {
 import type { Lineup, FormationKey, Slot } from '../../engine/types';
 import { SQUAD, byNo } from '../../data/players';
 import { realLineup, slotsOf, bandFromY } from '../../engine/formations';
-import { fitOf } from '../../engine/fitness';
+import { fitOf, widthBias } from '../../engine/fitness';
+import { Coachmarks, type Mark } from '../coachmarks';
+
+/** 라커룸 첫 방문 안내. 여기가 조작이 가장 많은 화면이라 설명이 필요하다 */
+const GUIDE: Mark[] = [
+  {
+    sel: '.fm-tabs',
+    title: '형태를 고릅니다',
+    body: '프리셋으로 빠르게 시작해도 되고, 선수를 직접 옮겨 원하는 형태를 만들어도 됩니다.',
+  },
+  {
+    sel: '.pitch',
+    title: '옮기는 방법은 두 가지입니다',
+    body: '끌어다 놓아도 되고, 눌러서 옮겨도 됩니다. 선수를 한 번 누른 뒤 빈 잔디를 누르면 그 자리로 가고, 다른 선수를 누르면 둘이 자리를 바꿉니다.',
+  },
+  {
+    sel: '.band-line',
+    title: '놓인 높이가 곧 역할입니다',
+    body: '이 점선을 넘기면 역할이 바뀝니다. 위로 올리면 공격, 아래로 내리면 수비입니다. 좌우로 벌린 정도는 측면 전개에 반영됩니다.',
+  },
+  {
+    sel: '.bench-strip',
+    title: '벤치는 열다섯 명입니다',
+    body: '옆으로 넘기면 나머지가 나옵니다. 벤치 선수를 누른 뒤 그라운드의 선수를 누르면 둘이 바뀌고, 끌어다 놓아도 같습니다.',
+  },
+];
 import { audio } from '../audio';
 
 export interface D1Result {
@@ -27,11 +53,43 @@ export interface D1Result {
 const clampX = (x: number) => Math.min(94, Math.max(6, x));
 const clampY = (y: number) => Math.min(95, Math.max(7, y));
 
-/** 배치된 밴드 구성을 포메이션 표기로 (수비-미드-공격) */
-function shapeOf(lineup: Lineup): string {
+/** 밴드 3단계 표기 (수비-미드-공격) — 줄이 너무 잘게 쪼개질 때의 대비책 */
+function bandShape(lineup: Lineup): string {
   const c = { GK: 0, DF: 0, MF: 0, FW: 0 };
   for (const p of lineup.placements) c[lineup.slots.find((s) => s.id === p.slotId)!.band] += 1;
   return `${c.DF}-${c.MF}-${c.FW}`;
+}
+
+/** 같은 줄로 볼 세로 간격(%p). 이보다 벌어지면 다른 줄이다 */
+const ROW_GAP = 9;
+
+/** 실제로 늘어선 줄을 세어 포메이션 표기로.
+ *  밴드 3단계로만 세면 투톱+투윙이 전부 '공격 4'로 뭉쳐 3-3-4가 된다.
+ *  감독이 머리에 그린 3-3-2-2와 화면 표기가 어긋나므로 높이로 줄을 갈라 센다. */
+function shapeOf(lineup: Lineup): string {
+  const ys = lineup.placements
+    .map((p) => lineup.slots.find((s) => s.id === p.slotId)!)
+    .filter((s) => s.band !== 'GK')
+    .map((s) => s.y)
+    .sort((a, b) => b - a); // 수비(y 큼) → 공격(y 작음)
+  if (!ys.length) return bandShape(lineup);
+
+  const rows = [1];
+  for (let i = 1; i < ys.length; i++) {
+    if (ys[i - 1] - ys[i] >= ROW_GAP) rows.push(1);
+    else rows[rows.length - 1] += 1;
+  }
+  // 계단처럼 흩어 놓으면 1-1-1-1... 이 되어 읽을 수 없다
+  return rows.length > 4 ? bandShape(lineup) : rows.join('-');
+}
+
+/** 폭을 사람 말로. 좌우 배치가 실제로 계산에 들어간다는 것을 화면에서 보여준다 */
+function widthLabel(bias: number): { text: string; tone: string } | null {
+  if (bias >= 0.55) return { text: '측면 최대', tone: 'wide' };
+  if (bias >= 0.2) return { text: '측면 넓게', tone: 'wide' };
+  if (bias <= -0.55) return { text: '중앙 최대', tone: 'narrow' };
+  if (bias <= -0.2) return { text: '중앙 좁게', tone: 'narrow' };
+  return null; // 실제 선발과 비슷한 폭이면 굳이 표시하지 않는다
 }
 
 function SlotChip(props: { slot: Slot; playerNo: number; selected: boolean; onTap: () => void }) {
@@ -93,6 +151,7 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
   const placedNos = lineup.placements.map((p) => p.playerNo);
   const bench = useMemo(() => SQUAD.filter((p) => !placedNos.includes(p.no)), [placedNos]);
   const shape = shapeOf(lineup);
+  const width = widthLabel(widthBias(lineup));
 
   const placeFromBench = (no: number, slotId: string) =>
     setLineup((lu) => ({
@@ -232,7 +291,12 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
             {k}
           </button>
         ))}
-        {lineup.formation === 'custom' && <button className="on custom">자유 {shape}</button>}
+        {lineup.formation === 'custom' && (
+          <button className="on custom">
+            자유 {shape}
+            {width && <em className={`wtag ${width.tone}`}>{width.text}</em>}
+          </button>
+        )}
         <button className="ghost" onClick={() => setLineup(realLineup())} title="그날의 실제 선발로 되돌립니다">
           ↺ 실제 선발
         </button>
@@ -251,6 +315,9 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
             <span style={{ top: '48%' }}>미드필드</span>
             <span style={{ top: '74%' }}>수비</span>
           </div>
+          {/* 역할 경계를 눈에 보이게 — 이 선을 넘겨야 공격/미드필드가 바뀐다 */}
+          <div className="band-line" style={{ top: '36%' }} data-label="공격 / 미드필드" />
+          <div className="band-line" style={{ top: '62%' }} data-label="미드필드 / 수비" />
           {lineup.placements.map((pl) => (
             <SlotChip
               key={pl.slotId}
@@ -283,15 +350,17 @@ export function Locker(props: { onStart: (d1: D1Result) => void }) {
 
       <p className="hint dim">
         {selBench != null
-          ? `${byNo(selBench).name} 선택됨. 넣을 자리를 탭하세요`
+          ? `${byNo(selBench).name} 선택됨. 바꿀 선수를 누르세요`
           : selSlot != null
-            ? '옮길 곳을 탭하세요. 잔디의 빈 곳을 탭하면 그 자리로 이동합니다'
-            : '선수를 잔디 아무 곳에나 끌어다 놓을 수 있습니다. 놓인 높이가 곧 역할입니다'}
+            ? '빈 잔디를 누르면 그 자리로, 다른 선수를 누르면 자리를 바꿉니다'
+            : '끌어다 놓아도 되고 눌러서 옮겨도 됩니다. 높이가 역할을, 좌우 폭이 전개 방식을 정합니다'}
       </p>
 
       <button className="cta wide" onClick={start}>
         경기 시작
       </button>
+
+      <Coachmarks marks={GUIDE} storageKey="gsu-guide-locker" />
 
       {confirmSon && (
         <div className="modal-back">

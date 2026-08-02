@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import type { MatchResult } from '../../engine/types';
 import { thirdTableFor, THIRD_PLACE_FINAL, FATE_MATCHES, ADVANCE_LINE, type ThirdRow } from '../../data/standings';
 import { waitroomLine } from '../content';
+import { audio } from '../audio';
 
 const AUTO_MS = 8000;
 
@@ -14,6 +15,13 @@ export function WaitRoom(props: { result: MatchResult; score: [number, number]; 
   const isLoss = result === 'loss';
   const [step, setStep] = useState(0); // 0 입장 → 1 경기1 → 2 경기2 → 3 운명
   const maxStep = 3;
+
+  // 경기가 끝나고 기다리는 방이다. 관중은 빠지고 지속음만 남긴다
+  useEffect(() => {
+    audio.cut();
+    audio.drone(0.055, 4);
+    return () => audio.drone(0, 2);
+  }, []);
 
   // 자동 진행 보장 — 심사자가 멈춘 화면으로 오인하지 않게
   useEffect(() => {

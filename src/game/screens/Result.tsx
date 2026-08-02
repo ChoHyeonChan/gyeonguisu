@@ -4,6 +4,7 @@ import type { MatchState, MatchResult } from '../../engine/types';
 import { REAL_BENCH_MOVES, byNo } from '../../data/players';
 import { groupAfter } from '../../data/standings';
 import { headline, verdictText } from '../content';
+import { audio } from '../audio';
 import { useEffect, useMemo, useState } from 'react';
 
 const OPT_LABEL: Record<string, string> = {
@@ -27,6 +28,14 @@ const OPT_LABEL: Record<string, string> = {
   'd5-bus': '걸어 잠금',
   'd5-more': '쐐기 사냥',
   'no-intervention': '개입하지 않음',
+};
+
+/** 마지막에 남는 한 줄. 결과마다 다르되, 뒤따르는 후렴은 같다.
+ *  무엇을 했든 실제의 그 밤은 바뀌지 않는다는 것이 이 게임이 닫히는 지점이다. */
+const CLOSING: Record<MatchResult, string> = {
+  win: '당신의 한국은 그 밤을 넘어섰습니다.',
+  draw: '당신의 한국은 마지막까지 계산기를 손에 쥐고 있었습니다.',
+  loss: '당신도 그 자리에 앉아 같은 것을 보았습니다.',
 };
 
 export function Result(props: { state: MatchState; result: MatchResult; onRetry: () => void }) {
@@ -55,6 +64,13 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
   const table = groupAfter(result, k, o);
   const [copied, setCopied] = useState(false);
   const [aiText, setAiText] = useState<string | null>(null);
+
+  // 결산은 경기가 아니라 회고다. 관중을 걷고 지속음만 남겨 화면과 소리를 함께 닫는다
+  useEffect(() => {
+    audio.cut();
+    audio.drone(0.05, 3);
+    return () => audio.drone(0, 1.5);
+  }, []);
 
   // AI 결산 — 서버리스 1회 호출. 실패·미배포 환경이면 규칙 기반 서술이 그대로 남는다 (기획서 §6-4 폴백)
   useEffect(() => {
@@ -197,6 +213,12 @@ export function Result(props: { state: MatchState; result: MatchResult; onRetry:
           </div>
         </>
       )}
+
+      {/* 닫는 장면 — 여기까지가 이야기다. 아래 버튼은 메뉴일 뿐이다 */}
+      <div className="r-close">
+        <p className="rc-line">{CLOSING[result]}</p>
+        <p className="rc-refrain">그리고 2026년 6월의 그 밤은, 아직 그대로 있습니다.</p>
+      </div>
 
       <button className="cta wide" onClick={props.onRetry}>
         다른 경우의 수를 살아보시겠습니까?
