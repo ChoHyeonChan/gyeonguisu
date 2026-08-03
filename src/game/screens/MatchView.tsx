@@ -339,7 +339,7 @@ export function MatchView(props: {
       <p className="sim-note">실제 경기 기록에 기반한 가상 시뮬레이션입니다</p>
 
       <div className="pitch-wrap">
-        <LivePitch lineup={st.lineup} onPitch={st.onPitch} seq={seq} seqId={seqNo.current} paused={paused} />
+        <LivePitch lineup={st.lineup} onPitch={st.onPitch} posture={st.posture} seq={seq} seqId={seqNo.current} paused={paused} />
         {board && (
           <div className="subboard" aria-live="polite">
             <div className="sb-head">교체</div>

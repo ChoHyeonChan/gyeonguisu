@@ -4,7 +4,7 @@
 // 피치 좌표: y=0 상대 골문, y=100 우리 골문. 한국은 위로 공격한다.
 
 import { useEffect, useRef, useState } from 'react';
-import type { Lineup, MatchEventKey } from '../engine/types';
+import type { Lineup, MatchEventKey, Posture } from '../engine/types';
 import { byNo } from '../data/players';
 
 export interface Waypoint {
@@ -152,15 +152,28 @@ export function seqFor(key: MatchEventKey): Waypoint[] {
   }
 }
 
+/** 자세가 바뀌면 대형이 실제로 움직인다. "투톱에 양 날개, 전부 올립시다"를 골랐는데
+ *  화면이 그대로면 지시가 전달됐는지 알 수 없다. 밴드별 전진량(+가 상대 골문 쪽)과
+ *  좌우로 벌어지는 비율. 확률은 엔진이 이미 반영하고 있고 여기는 그 결과를 보여줄 뿐이다. */
+const POSTURE_SHAPE: Record<Posture, { fw: number; mf: number; df: number; wide: number }> = {
+  normal: { fw: 0, mf: 0, df: 0, wide: 0 },
+  low: { fw: -7, mf: -8, df: -5, wide: -0.1 },
+  counter: { fw: -4, mf: -6, df: -3, wide: -0.06 },
+  high: { fw: 4, mf: 6, df: 6, wide: 0.07 },
+  allout: { fw: 8, mf: 12, df: 10, wide: 0.18 },
+};
+
 export function LivePitch(props: {
   lineup: Lineup;
   onPitch: number[];
+  posture: Posture;
   /** 재생할 궤적. 새 배열이 들어오면 그 시퀀스를 따라간다 */
   seq: Waypoint[] | null;
   seqId: number;
   paused: boolean;
 }) {
-  const { lineup, onPitch, seq, seqId, paused } = props;
+  const { lineup, onPitch, posture, seq, seqId, paused } = props;
+  const shape = POSTURE_SHAPE[posture];
   const [ball, setBall] = useState({ x: 50, y: 50, ms: 600 });
   const [shot, setShot] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -219,11 +232,14 @@ export function LivePitch(props: {
           const p = byNo(pl.playerNo);
           // 공 쪽으로 살짝 쏠린다
           const lean = slot.band === 'GK' ? 0 : (ball.x - slot.x) * 0.06;
+          // 골키퍼는 자세와 무관하게 골문을 지킨다
+          const up = slot.band === 'GK' ? 0 : slot.band === 'FW' ? shape.fw : slot.band === 'MF' ? shape.mf : shape.df;
+          const spread = slot.band === 'GK' ? 0 : (slot.x - 50) * shape.wide;
           return (
             <div
               key={slot.id}
               className={`dot ${slot.band === 'GK' ? 'gk' : ''}`}
-              style={{ left: `${slot.x + lean}%`, top: `${slot.y}%` }}
+              style={{ left: `${slot.x + lean + spread}%`, top: `${slot.y - up}%` }}
               title={p.name}
             >
               <span>{p.no}</span>
